@@ -11,6 +11,8 @@ from typing import List
 
 import cv2
 import numpy as np
+import gc
+import h5py
 
 DEBUG = False
 
@@ -35,19 +37,56 @@ class FocusStacker(object):
         self._laplacian_kernel_size = laplacian_kernel_size
         self._gaussian_blur_kernel_size = gaussian_blur_kernel_size
 
+    # def processGroupOfImages(self, image_files, groupSize, ignoreImageRead):
+    #     stackedImages = []
+    #     # Divide images into groups of GROUP_SIZE and process every group to prevent RAM overload
+    #     currentGroup = []
+    #     for image in image_files:
+    #         currentGroup.append(image)
+    #         if len(currentGroup) == groupSize:  # Stack a group of images
+    #             print("Stacking a group of " + str(groupSize) + " images")
+
+    #             # focus stack a list of images
+    #             # Read images if not already read (on first iteration)
+    #             images = None
+    #             if not ignoreImageRead:
+    #                 images = self._read_images(currentGroup)
+    #             else:
+    #                 images = image_files
+
+    #             laplacian = self._compute_laplacian(images)
+    #             focus_stacked = self._find_focus_regions(images, laplacian)
+
+    #             # Insert stacked image into stackedImages list (for combining later on)
+    #             stackedImages.append(focus_stacked)
+    #             # Reset currentGroup
+    #             currentGroup = []
+
+    #     return stackedImages
+
+    # focus stack a list of images
     def focus_stack(self, image_files: List[str]) -> np.ndarray:
-        """Pipeline to focus stack a list of images."""
-        image_matrices = self._read_images(image_files)
-        images = self._align_images(image_matrices)
-        laplacian = self._compute_laplacian(images)
-        focus_stacked = self._find_focus_regions(images, laplacian)
-        return focus_stacked
+        numberOfImages = len(image_files)
+        # Read images if not already read (on first iteration)
+        self._read_images(image_files)
+        self._compute_laplacian(numberOfImages)
+        # focus_stacked = self._find_focus_regions(numberOfImages)
+        # return focus_stacked
 
     @staticmethod
     def _read_images(image_files: List[str]) -> List[np.ndarray]:
-        """Read the images into numpy arrays using OpenCV."""
-        logger.info("reading images")
-        return [cv2.imread(img) for img in image_files]
+        # Read images and put them in a hdf5 file (stored on disk)
+        for i, img in enumerate(image_files):
+            with h5py.File('images.hdf5', 'w') as f:
+                dset = f.create_dataset(
+                    "Image_" + str(i), data=cv2.imread(img))
+                # logger.info("Reading " + str(i) +
+                # "/" + str(len(image_files)))
+                print("Image_" + str(i))
+
+        # with h5py.File('images.hdf5', 'w') as f:
+        #     dset = f.create_dataset(
+        #         "LoadedImages", data=[cv2.imread(img) for img in image_files])
 
     @staticmethod
     def _align_images(images: List[np.ndarray]) -> List[np.ndarray]:
@@ -83,10 +122,12 @@ class FocusStacker(object):
         # Assume that image 0 is the "base" image and align all the following images to it
         aligned_imgs.append(images[0])
         img0_gray = cv2.cvtColor(images[0], cv2.COLOR_BGR2GRAY)
-        img1_key_points, image1_desc = detector.detectAndCompute(img0_gray, None)
+        img1_key_points, image1_desc = detector.detectAndCompute(
+            img0_gray, None)
 
         for i in range(1, len(images)):
-            img_i_key_points, image_i_desc = detector.detectAndCompute(images[i], None)
+            img_i_key_points, image_i_desc = detector.detectAndCompute(
+                images[i], None)
 
             if USE_SIFT:
                 bf = cv2.BFMatcher()
@@ -121,33 +162,38 @@ class FocusStacker(object):
 
         return aligned_imgs
 
-    def _compute_laplacian(self, images: List[np.ndarray],) -> np.ndarray:
+    def _compute_laplacian(self, numberOfImages):
         """Gaussian blur and compute the gradient map of the image. This is proxy for finding the focus regions.
 
-        Args:
-            images: image data
         """
         logger.info("Computing the laplacian of the blurred images")
-        laplacians = []
-        for image in images:
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            blurred = cv2.GaussianBlur(
-                gray,
-                (self._gaussian_blur_kernel_size, self._gaussian_blur_kernel_size),
-                0,
-            )
-            laplacian_gradient = cv2.Laplacian(
-                blurred, cv2.CV_64F, ksize=self._laplacian_kernel_size
-            )
-            laplacians.append(laplacian_gradient)
-        laplacians = np.asarray(laplacians)
-        logger.debug(f"Shape of array of laplacian gradient: {laplacians.shape}")
-        return laplacians
+        for i in range(numberOfImages):
+            # Get images from hdf5 (open with read/write permissions)
+            with h5py.File('images.hdf5', 'r+') as f:
+                image = f['Image_' + str(i)]
+
+                print("Processing " + str(i+1) + "/" + str(numberOfImages))
+                gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+                blurred = cv2.GaussianBlur(
+                    gray,
+                    (self._gaussian_blur_kernel_size,
+                     self._gaussian_blur_kernel_size),
+                    0,
+                )
+                laplacian_gradient = cv2.Laplacian(
+                    blurred, cv2.CV_64F, ksize=self._laplacian_kernel_size
+                )
+                # Write to disk
+                f.create_dataset("Laplacian_" + str(i),
+                                 data=laplacian_gradient)
+
+        # # Write laplacians to DataSet on disk
+        # with h5py.File('images.hdf5', 'w') as f:
+        #     dset = f.create_dataset(
+        #         "Laplacians", data=np.asarray(laplacians))
 
     @staticmethod
-    def _find_focus_regions(
-        images: List[np.ndarray], laplacian_gradient: np.ndarray
-    ) -> np.ndarray:
+    def _find_focus_regions(self, numberOfImages) -> np.ndarray:
         """Take the absolute value of the Laplacian (2nd order gradient) of the Gaussian blur result.
         This will quantify the strength of the edges with respect to the size and strength of the kernel (focus regions).
 
@@ -167,12 +213,21 @@ class FocusStacker(object):
             np.array image data of focus stacked image, size of orignal image
 
         """
-        logger.info("Using laplacian gradient to find regions of focus, and stack.")
-        output = np.zeros(shape=images[0].shape, dtype=images[0].dtype)
-        abs_laplacian = np.absolute(laplacian_gradient)
-        maxima = abs_laplacian.max(axis=0)
-        bool_mask = np.array(abs_laplacian == maxima)
-        mask = bool_mask.astype(np.uint8)
+        # Get files from hdf5
+        for i in range(numberOfImages):
+            with h5py.File('images.hdf5', 'r') as f:
+                # images = f['LoadedImages']
+                # laplacian_gradient = f['Laplacians']
+                image = f["Image_" + str(i)]
+                laplacian = f["Laplacian_" + str(i)]
+
+                logger.info(
+                    "Using laplacian gradient to find regions of focus, and stack.")
+                output = np.zeros(shape=images[0].shape, dtype=images[0].dtype)
+                abs_laplacian = np.absolute(laplacian_gradient)
+                maxima = abs_laplacian.max(axis=0)
+                bool_mask = np.array(abs_laplacian == maxima)
+                mask = bool_mask.astype(np.uint8)
 
         for i, img in enumerate(images):
             output = cv2.bitwise_not(img, output, mask=mask[i])
