@@ -17,8 +17,8 @@ images = imread("images/DSC_0374.jpg")
 grayscaled_images = grayscale(images)   # Convert images to grayscale
 print(images.shape)
 print(grayscaled_images.shape)
-smoothed = ndfilters.gaussian_filter(grayscaled_images, sigma=[1, 1])
+#smoothed = ndfilters.gaussian_filter(grayscaled_images, sigma=[1, 1])
 
 with napari.gui_qt():
     viewer = napari.view_image(images)
-    viewer.add_image(smoothed)
+    #viewer.add_image(smoothed)
