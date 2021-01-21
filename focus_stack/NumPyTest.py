@@ -4,7 +4,6 @@ import glob
 import time
 import cv2
 from PIL import Image
-import napari
 
 IMAGE_DIR = "images/*.jpg" # Directory containing images + extension of images
 
@@ -20,7 +19,7 @@ def loadImagesFromFolder(imgFolder):
         global imageHeight
         global imageWidth
 
-        img = Image.open(imPath)
+        img = Image.open(imPath).convert("L") # TODO: Temporary conversion to Luminance
         grayscale = img.convert("L")
         width, height = img.size
 
@@ -32,7 +31,9 @@ def loadImagesFromFolder(imgFolder):
 
         # Create image memmap
         memMappedImg = numpy.memmap(imPath + ".img", mode="w+", shape=(imageHeight, imageWidth, 3)) # Create a memory mapped array for storing raw image data (matching image dimensions)
-        memMappedImg[:] = numpy.asarray(img)    # Copy img to memmap
+        RGBImage = numpy.asarray(cv2.imread(imPath))
+        print(RGBImage.shape)
+        memMappedImg[:] = RGBImage    # Copy img to memmap
 
         # Create grayscale image memmap
         memMappedGrayscale = numpy.memmap(imPath + ".grayscale", mode="w+", shape=(imageHeight, imageWidth)) # Create a memory mapped array for storing raw image data (matching image dimensions)
@@ -43,7 +44,7 @@ def loadImagesFromFolder(imgFolder):
         del memMappedGrayscale
 
         # if imPath == "images/DSC_0372.jpg":
-        #     memMappedImg = numpy.memmap(imPath + ".mmap", mode="r", shape=(imageHeight, imageWidth))
+        #     memMappedImg = numpy.memmap(imPath + ".grayscale", mode="r", shape=(imageHeight, imageWidth))
         #     Image.fromarray(memMappedImg).show()
         #     del memMappedImg
 
@@ -65,8 +66,8 @@ def processGrayscaleLoadedImages(imgFolder):
 
         memMappedImgArray = numpy.memmap(imPath + ".grayscale", mode="r+", shape=(imageHeight, imageWidth))
 
-        blurredImg = cv2.GaussianBlur(memMappedImgArray, (3, 3), 0)
-        laplacianGradient = cv2.Laplacian(blurredImg, cv2.CV_64F, ksize=1                                                                                                                                                               )
+        blurredImg = cv2.GaussianBlur(memMappedImgArray, (5, 5), 0)
+        laplacianGradient = cv2.Laplacian(memMappedImgArray, cv2.CV_64F, ksize=3)
 
         memMappedImgArray[:] = laplacianGradient   # Store processed (grayscale) image
         del memMappedImgArray
@@ -90,10 +91,9 @@ def stackLoadedImages(imgFolder):
     laplacians = []
     imgFileList = glob.glob(imgFolder)
     for imPath in sorted(imgFileList):
-        images.append(numpy.memmap(imPath + ".img", mode="r", shape=(imageHeight, imageWidth)))
+        images.append(numpy.memmap(imPath + ".img", mode="r", shape=(imageHeight, imageWidth, 3)))
         laplacians.append(numpy.memmap(imPath + ".grayscale", mode="r", shape=(imageHeight, imageWidth)))
-    
-    images = numpy.asarray(images)
+
     laplacians = numpy.asarray(laplacians)
 
     output = numpy.zeros(shape=images[0].shape, dtype=images[0].dtype)  # Create new array filled with zeros
@@ -103,18 +103,11 @@ def stackLoadedImages(imgFolder):
     mask = boolMask.astype(numpy.uint8)
 
     for i, img in enumerate(images):
-        output = cv2.bitwise_not(images[i], output, mask=mask[i])
+        output = cv2.bitwise_not(img, output, mask=mask[i])
 
     outputImage = 255 - output
 
-    with napari.gui_qt():
-        viewer = napari.view_image(data.astronaut())
-        #viewer.add_images(laplacians)
-        #viewer.add_image(outputImage)
-
     return outputImage
-
-
 
 loadImagesFromFolder(IMAGE_DIR)
 print("--- Loaded all images in: %s seconds ---" % (time.time() - start_time))
@@ -126,6 +119,10 @@ print("--- Processed grayscale images in: %s seconds ---" % (time.time() - start
 start_time = time.time()
 
 # Stack images
-outputImage = stackLoadedImages(IMAGE_DIR)
-print("--- Stacked all images in: %s seconds ---" % (time.time() - start_time))
-# Image.fromarray(outputImage).show()
+stackedImg = stackLoadedImages(IMAGE_DIR)
+# Write stacked image to disk
+memMappedImg = numpy.memmap("stacked.img", mode="w+", shape=(imageHeight, imageWidth, 3)) #! Output image is only one dimension?? (convert L to RGB)
+memMappedImg[:] = stackedImg
+del memMappedImg
+
+print("--- Created stack in: %s seconds ---" % (time.time() - start_time))
