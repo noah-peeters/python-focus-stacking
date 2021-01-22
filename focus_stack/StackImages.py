@@ -5,7 +5,7 @@ import time
 import cv2
 from PIL import Image
 
-IMAGE_DIR = "/*.jpg" # Directory containing images + extension of images
+IMAGE_DIR = "HighResImages/*.jpg" # Directory containing images + extension of images
 
 imageHeight = None
 imageWidth = None
@@ -61,8 +61,8 @@ def processGrayscaleLoadedImages(imgFolder):
 
         memMappedImgArray = numpy.memmap(imPath + ".grayscale", mode="r+", shape=(imageHeight, imageWidth))
 
-        blurredImg = cv2.GaussianBlur(memMappedImgArray, (3, 3), 0)
-        laplacianGradient = cv2.Laplacian(blurredImg, -1, ksize=1) # ddepth -1 for same as src image (cv2.CV_64F)
+        blurredImg = cv2.GaussianBlur(memMappedImgArray, (7, 7), 0)
+        laplacianGradient = cv2.Laplacian(blurredImg, -1, ksize=3) # ddepth -1 for same as src image (cv2.CV_64F)
 
         memMappedImgArray[:] = laplacianGradient   # Store processed (grayscale) image
         del memMappedImgArray

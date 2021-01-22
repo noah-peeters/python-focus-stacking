@@ -5,7 +5,7 @@ import glob
 from PIL import Image
 
 
-IMAGE_DIR = "images/*.jpg"
+IMAGE_DIR = "HighResImages/*.jpg"
 
 imageHeight = None
 imageWidth = None
@@ -13,7 +13,6 @@ imageWidth = None
 imgFileList = glob.glob(IMAGE_DIR)
 for index, imPath in enumerate(imgFileList):
     if index == 0:
-        print("read img")
         image = Image.open(imPath)
         imageWidth, imageHeight = image.size
 
