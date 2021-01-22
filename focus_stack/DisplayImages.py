@@ -2,17 +2,40 @@ import napari
 from napari.qt.threading import thread_worker
 import numpy
 import glob
+import os, os.path
 
-IMAGE_DIR = "images/*.jpg"
+
+IMAGE_DIR = "test/*.jpg"
+
 
 with napari.gui_qt():
     viewer = napari.Viewer()
 
-    @thread_worker(connect={"returned": viewer.add_image})
-    def loadStackedImage():
-        return numpy.memmap("stacked.img", mode="r", shape=(4000, 6000))
+    def stackedImghandler(imgArray):
+        viewer.add_image(imgArray, name="Stacked Image", rgb=True)
+        print("Stacked image has been loaded.")
 
-    @thread_worker(connect={"returned": viewer.add_image})
+    def maskImghandler(imgArray):
+        viewer.add_image(imgArray, name="Mask")
+        print("Mask has been loaded.")
+
+    def origImagesHandler(imgArray):
+        viewer.add_image(imgArray, name="Original Images")
+        print("Original images have loaded.")
+
+    def grayscaleImagesHandler(imgArray):
+        viewer.add_image(imgArray, name="Grayscale Images")
+        print("Grayscale images have loaded.")
+
+    @thread_worker(connect={"returned": stackedImghandler})
+    def loadStackedImage():
+        return numpy.memmap("stacked.img", mode="r", shape=(4000, 6000, 3))
+    
+    @thread_worker(connect={"returned": maskImghandler})
+    def loadMask():
+        return numpy.memmap("mask.img", mode="r", shape=(54, 4000, 6000)) # First dim is number of images in stack
+
+    @thread_worker(connect={"returned": origImagesHandler})
     def loadImages():
         images = []
 
@@ -22,7 +45,7 @@ with napari.gui_qt():
 
         return numpy.asarray(images)
 
-    @thread_worker(connect={"returned": viewer.add_image})
+    @thread_worker(connect={"returned": grayscaleImagesHandler})
     def loadGrayscaleImages():
         grayscales = []
 
@@ -34,5 +57,6 @@ with napari.gui_qt():
 
     # Run threaded functions
     loadStackedImage()
+    loadMask()
     loadImages()
     loadGrayscaleImages()
