@@ -23,6 +23,12 @@ git clone https://github.com/momonala/focus-stack
 cd focus-stack
 pip install  -e .
 ```
+ubuntu 
+```
+pip3 install -r ./requirements.txt
+pip3 install -e . 
+```
+
 
 ## Usage
 ```bash
