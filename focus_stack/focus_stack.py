@@ -5,7 +5,6 @@ http://stackoverflow.com/questions/15911783/what-are-some-common-focus-stacking-
 https://github.com/cmcguinness/focusstack
 
 """
-
 import logging
 from typing import List
 
@@ -142,6 +141,11 @@ class FocusStacker(object):
             laplacians.append(laplacian_gradient)
         laplacians = np.asarray(laplacians)
         logger.debug(f"Shape of array of laplacian gradient: {laplacians.shape}")
+
+        # cv2.namedWindow('laplacian', cv2.WINDOW_AUTOSIZE)
+        # cv2.imshow("image", laplacians[0])
+        # cv2.waitKey()
+
         return laplacians
 
     @staticmethod
@@ -174,7 +178,9 @@ class FocusStacker(object):
         bool_mask = np.array(abs_laplacian == maxima)
         mask = bool_mask.astype(np.uint8)
 
+        print(mask)
+
         for i, img in enumerate(images):
             output = cv2.bitwise_not(img, output, mask=mask[i])
-        print(output.shape)
+
         return 255 - output

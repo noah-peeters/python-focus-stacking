@@ -5,7 +5,7 @@ import time
 import cv2
 from PIL import Image
 
-IMAGE_DIR = "images/*.jpg" # Directory containing images + extension of images
+IMAGE_DIR = "test/*.jpg" # Directory containing images + extension of images
 
 imageHeight = None
 imageWidth = None
@@ -19,9 +19,9 @@ def loadImagesFromFolder(imgFolder):
         global imageHeight
         global imageWidth
 
-        img = Image.open(imPath).convert("L") # TODO: Temporary conversion to Luminance
-        grayscale = img.convert("L")
-        width, height = img.size
+        image = cv2.imread(imPath)
+        grayscale = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        height, width, channels = image.shape
 
         # Set image dimensions (for use in other functions)
         if not imageHeight:
@@ -31,16 +31,14 @@ def loadImagesFromFolder(imgFolder):
 
         # Create image memmap
         memMappedImg = numpy.memmap(imPath + ".img", mode="w+", shape=(imageHeight, imageWidth, 3)) # Create a memory mapped array for storing raw image data (matching image dimensions)
-        RGBImage = numpy.asarray(cv2.imread(imPath))
-        print(RGBImage.shape)
-        memMappedImg[:] = RGBImage    # Copy img to memmap
+        memMappedImg[:] = numpy.asarray(image)    # Copy RGB img to memmap
+        # Unmount
+        del memMappedImg
 
         # Create grayscale image memmap
         memMappedGrayscale = numpy.memmap(imPath + ".grayscale", mode="w+", shape=(imageHeight, imageWidth)) # Create a memory mapped array for storing raw image data (matching image dimensions)
         memMappedGrayscale[:] = numpy.asarray(grayscale)    # Copy img to memmap
-
-        # Ummnount memmaps
-        del memMappedImg
+        # Unmount
         del memMappedGrayscale
 
         # if imPath == "images/DSC_0372.jpg":
@@ -50,7 +48,7 @@ def loadImagesFromFolder(imgFolder):
 
     processes = []
     # Insert processes in list
-    imgFileList = glob.glob(imgFolder)
+    imgFileList = glob.glob(imgFolder) # TODO: Error when dir contains other items
     for imPath in sorted(imgFileList):
         processes.append(dask.delayed(loadImage)(imPath))
     
@@ -58,7 +56,7 @@ def loadImagesFromFolder(imgFolder):
     dask.compute(*processes)
 
 
-# Function for applying a gaussian blur on all loaded images
+# Function for applying a gaussian blur and a laplacian gradient on all loaded images (written back to .grayscale)
 def processGrayscaleLoadedImages(imgFolder):
     def processImage(imPath):
         global imageHeight
@@ -66,8 +64,8 @@ def processGrayscaleLoadedImages(imgFolder):
 
         memMappedImgArray = numpy.memmap(imPath + ".grayscale", mode="r+", shape=(imageHeight, imageWidth))
 
-        blurredImg = cv2.GaussianBlur(memMappedImgArray, (5, 5), 0)
-        laplacianGradient = cv2.Laplacian(memMappedImgArray, cv2.CV_64F, ksize=3)
+        blurredImg = cv2.GaussianBlur(memMappedImgArray, (5, 5), 0,)
+        laplacianGradient = cv2.Laplacian(blurredImg, cv2.CV_64F, ksize=3)
 
         memMappedImgArray[:] = laplacianGradient   # Store processed (grayscale) image
         del memMappedImgArray
@@ -88,24 +86,31 @@ def processGrayscaleLoadedImages(imgFolder):
 def stackLoadedImages(imgFolder):
     # Get all images (in sorted order) and their laplacian gradient
     images = []
-    laplacians = []
+    laplacianGradient = []
     imgFileList = glob.glob(imgFolder)
     for imPath in sorted(imgFileList):
         images.append(numpy.memmap(imPath + ".img", mode="r", shape=(imageHeight, imageWidth, 3)))
-        laplacians.append(numpy.memmap(imPath + ".grayscale", mode="r", shape=(imageHeight, imageWidth)))
+        laplacianGradient.append(numpy.memmap(imPath + ".grayscale", mode="r", shape=(imageHeight, imageWidth)))
 
-    laplacians = numpy.asarray(laplacians)
+    laplacianGradient = numpy.asarray(laplacianGradient)
 
-    output = numpy.zeros(shape=images[0].shape, dtype=images[0].dtype)  # Create new array filled with zeros
-    absLaplacian = numpy.absolute(laplacians)                           # Get absolute values of Laplacian gradients
-    maxLaplacian = absLaplacian.max(axis=0)                             # Get max value of Laplacian gradients
-    boolMask = numpy.array(absLaplacian == maxLaplacian)                # Create new array
-    mask = boolMask.astype(numpy.uint8)
+
+    output = numpy.zeros_like(images[0])                    # Create new array filled with zeros
+    absLaplacian = numpy.absolute(laplacianGradient)        # Get absolute values of Laplacian gradients
+    maxLaplacian = absLaplacian.max(axis=0)                 # Get max value of Laplacian gradients
+    boolMask = numpy.array(absLaplacian == maxLaplacian)    # Create bool mask (true or false values)
+    mask = boolMask.astype(numpy.uint8)                     # Convert true/false into 1/0
+
+    maskImg = numpy.memmap("mask.img", mode="w+", shape=(len(images), imageHeight, imageWidth))
+    boolMask[:] = mask
+    del maskImg
 
     for i, img in enumerate(images):
         output = cv2.bitwise_not(img, output, mask=mask[i])
 
     outputImage = 255 - output
+
+    print(outputImage.shape)
 
     return outputImage
 
@@ -121,8 +126,10 @@ start_time = time.time()
 # Stack images
 stackedImg = stackLoadedImages(IMAGE_DIR)
 # Write stacked image to disk
-memMappedImg = numpy.memmap("stacked.img", mode="w+", shape=(imageHeight, imageWidth, 3)) #! Output image is only one dimension?? (convert L to RGB)
+memMappedImg = numpy.memmap("stacked.img", mode="w+", shape=(imageHeight, imageWidth, 3))
 memMappedImg[:] = stackedImg
 del memMappedImg
+
+Image.fromarray(stackedImg).show()
 
 print("--- Created stack in: %s seconds ---" % (time.time() - start_time))
