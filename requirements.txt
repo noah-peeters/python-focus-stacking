@@ -1,3 +1,4 @@
-opencv-contrib-python==3.4.2.17
-opencv-python==3.4.2.17
-numpy==1.18.1
+opencv-contrib-python==4.5.1.48
+opencv-python==4.5.1.48
+numpy==1.19.5
+dask[complete]==2021.1.1
