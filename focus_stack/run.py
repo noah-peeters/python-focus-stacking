@@ -8,11 +8,30 @@ from argparse import ArgumentParser
 
 import cv2
 
-from .focus_stack import FocusStacker
+from .stack_images import FocusStacker
+
+import atexit
+from time import time, strftime, localtime
+from datetime import timedelta
 
 logger = logging.getLogger(__name__)
 logging.basicConfig()
 logger.setLevel(logging.INFO)
+
+
+def secondsToStr(elapsed=None):
+    if elapsed is None:
+        return strftime("%Y-%m-%d %H:%M:%S", localtime())
+    else:
+        return str(timedelta(seconds=elapsed))
+
+def endlog():
+    end = time()
+    elapsed = end-start
+    logger.info("excution time: "+ secondsToStr(elapsed) + "s")
+
+start = time()
+atexit.register(endlog)
 
 
 def main():
@@ -62,6 +81,6 @@ def main():
         logger.info(f"overwriting image {args.output}")
     else:
         logger.info(f"writing image {args.output}")
-    cv2.imwrite(args.output, stacked)
-
-    os.system(f"open { args.output}")
+    
+    stacked.save(args.output)
+    stacked.show()
