@@ -5,7 +5,7 @@ import time
 import cv2
 from PIL import Image
 
-IMAGE_DIR = "HighResImages/*.jpg" # Directory containing images + extension of images
+IMAGE_DIR = "images/*.jpg" # Directory containing images + extension of images
 
 imageHeight = None
 imageWidth = None
@@ -22,6 +22,7 @@ def loadImagesFromFolder(imgFolder):
         image = cv2.imread(imPath)
         grayscale = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         height, width, channels = image.shape
+
 
 
         # Set image dimensions (for use in other functions)

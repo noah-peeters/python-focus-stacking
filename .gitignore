@@ -75,3 +75,7 @@ Thumbs.db
 # PyTest generated files #
 ##########################
 .pytest_cache
+
+
+#ignore temp files used
+images/*.raw

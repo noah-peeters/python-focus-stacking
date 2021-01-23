@@ -8,7 +8,7 @@ from argparse import ArgumentParser
 
 import cv2
 
-from .focus_stack import FocusStacker
+from .stack_images import FocusStacker
 
 logger = logging.getLogger(__name__)
 logging.basicConfig()
@@ -62,6 +62,8 @@ def main():
         logger.info(f"overwriting image {args.output}")
     else:
         logger.info(f"writing image {args.output}")
-    cv2.imwrite(args.output, stacked)
+    
+    stacked.save(args.output)
+    stacked.show()
 
     os.system(f"open { args.output}")
