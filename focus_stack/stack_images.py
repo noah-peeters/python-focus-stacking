@@ -40,15 +40,15 @@ class FocusStacker(object):
 
     def _process_images(self, image_files: List[str]) -> List[numpy.ndarray]:
         logger.info("concurrent processing images")
-    #   processes = []
+        processes = []
         image_objects = []
         for img_fn in image_files:
-            _image = ImageToStack(img_fn, self._gaussian_blur_kernel_size, self._laplacian_kernel_size)
-            _image.read_and_analyze()
+            _image = IndividualImage(img_fn, self._gaussian_blur_kernel_size, self._laplacian_kernel_size)
+            processes.append(dask.delayed(_image.read_and_analyze)())
             image_objects.append(_image)
         #    processes.append(dask.delayed(_image.read_and_analyze)(_image))
         # Load all images in parallel
-        dask.compute()
+        dask.compute(*processes)
 
         logger.info("stacking images")    
         # now do the final stacking
@@ -81,7 +81,7 @@ class FocusStacker(object):
         return Image.fromarray(stacked_image)
 
 
-class ImageToStack(object):
+class IndividualImage(object):
     def __init__(
         self, image_filename, laplacian_kernel_size: int = 5, gaussian_blur_kernel_size: int = 5
     ) -> None:
@@ -99,7 +99,6 @@ class ImageToStack(object):
         filename, file_extension = os.path.splitext(self._image_filename)
         return filename + ".raw", filename+".grayscale.raw"
 
-    #@dask.delayed
     def read_and_analyze(self):
         _raw_fn, _grayscale_fn = self._temp_filenames()
         # step 1: read image / prepare memmap 
