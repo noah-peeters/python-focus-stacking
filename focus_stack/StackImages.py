@@ -5,7 +5,7 @@ import time
 import cv2
 from PIL import Image
 
-IMAGE_DIR = "test/*.jpg" # Directory containing images + extension of images
+IMAGE_DIR = "HighResImages/*.jpg" # Directory containing images + extension of images
 
 imageHeight = None
 imageWidth = None
@@ -23,6 +23,7 @@ def loadImagesFromFolder(imgFolder):
         grayscale = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         height, width, channels = image.shape
 
+
         # Set image dimensions (for use in other functions)
         if not imageHeight:
             imageHeight = height
@@ -31,20 +32,16 @@ def loadImagesFromFolder(imgFolder):
 
         # Create image memmap
         memMappedImg = numpy.memmap(imPath + ".img", mode="w+", shape=(imageHeight, imageWidth, 3)) # Create a memory mapped array for storing raw image data (matching image dimensions)
-        memMappedImg[:] = numpy.asarray(image)    # Copy RGB img to memmap
+        memMappedImg[:] = numpy.asarray(image) # Copy RGB img to memmap
+
         # Unmount
         del memMappedImg
 
         # Create grayscale image memmap
         memMappedGrayscale = numpy.memmap(imPath + ".grayscale", mode="w+", shape=(imageHeight, imageWidth)) # Create a memory mapped array for storing raw image data (matching image dimensions)
-        memMappedGrayscale[:] = numpy.asarray(grayscale)    # Copy img to memmap
+        memMappedGrayscale[:] = numpy.asarray(grayscale) # Copy img to memmap
         # Unmount
         del memMappedGrayscale
-
-        # if imPath == "images/DSC_0372.jpg":
-        #     memMappedImg = numpy.memmap(imPath + ".grayscale", mode="r", shape=(imageHeight, imageWidth))
-        #     Image.fromarray(memMappedImg).show()
-        #     del memMappedImg
 
     processes = []
     # Insert processes in list
@@ -64,16 +61,11 @@ def processGrayscaleLoadedImages(imgFolder):
 
         memMappedImgArray = numpy.memmap(imPath + ".grayscale", mode="r+", shape=(imageHeight, imageWidth))
 
-        blurredImg = cv2.GaussianBlur(memMappedImgArray, (5, 5), 0,)
-        laplacianGradient = cv2.Laplacian(blurredImg, cv2.CV_64F, ksize=3)
+        blurredImg = cv2.GaussianBlur(memMappedImgArray, (7, 7), 0)
+        laplacianGradient = cv2.Laplacian(blurredImg, -1, ksize=3) # ddepth -1 for same as src image (cv2.CV_64F)
 
         memMappedImgArray[:] = laplacianGradient   # Store processed (grayscale) image
         del memMappedImgArray
-
-        # if imPath == "images/DSC_0372.jpg":
-        #     memMappedImg = numpy.memmap(imPath + ".grayscale", mode="r", shape=(imageHeight, imageWidth))
-        #     Image.fromarray(memMappedImg).show()
-        #     del memMappedImg
 
     processes = []
     imgFileList = glob.glob(imgFolder)
@@ -101,18 +93,12 @@ def stackLoadedImages(imgFolder):
     boolMask = numpy.array(absLaplacian == maxLaplacian)    # Create bool mask (true or false values)
     mask = boolMask.astype(numpy.uint8)                     # Convert true/false into 1/0
 
-    maskImg = numpy.memmap("mask.img", mode="w+", shape=(len(images), imageHeight, imageWidth))
-    boolMask[:] = mask
-    del maskImg
-
     for i, img in enumerate(images):
         output = cv2.bitwise_not(img, output, mask=mask[i])
 
     outputImage = 255 - output
 
-    print(outputImage.shape)
-
-    return outputImage
+    return cv2.cvtColor(outputImage, cv2.COLOR_BGR2RGB) #* PILLOW (PIL) is in RGB and cv2 is in BGR! Image must be converted from BGR to RGB.
 
 loadImagesFromFolder(IMAGE_DIR)
 print("--- Loaded all images in: %s seconds ---" % (time.time() - start_time))
