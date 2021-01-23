@@ -1,8 +1,8 @@
 # Focus Stacking
 
-Focus Stacking in Python
+This script is an optimized rework of  https://github.com/momonala/focus-stack using Dask and Memory mapped data for faster and more stable execution.
 
-I wrote `focusstack`, a image simple focus stacking tool, for creating fun images with my microscope.
+## Focus Stacking in Python
 
 Per [Wikipedia](https://en.wikipedia.org/wiki/Focus_stacking): Focus stacking is a digital image processing technique which combines multiple images taken at different focus distances to give a resulting image with a greater depth of field (DOF) than any of the individual source images.
 
@@ -10,7 +10,6 @@ See [below](#how-it-works) for a longer explanation of the algorithm.
 
 The ThoughtEmporium has a great explainer video [on Youtube](https://www.youtube.com/watch?v=3wfI_rEGyDw).
 
----
 ## Installation
 
 `focusstack` can be installed by running `pip install focus-stack`. It requires Python 3.6.0+, OpenCV<3.4.2, and numpy.
