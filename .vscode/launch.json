@@ -6,7 +6,7 @@
       "type": "python",
       "request": "launch",
       "module": "focus_stack",
-      "args": ["-i", "images/", "-o", "/tmp/generated.jpg", "-d", "True", "-g", "5", "-l", "5"],
+      "args": ["-i", "HighResImages/", "-o", "/home/noah/Pictures/stackedImage.jpg", "-d", "True", "-g", "5", "-l", "5"],
       "console": "integratedTerminal"
     },
     {

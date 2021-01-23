@@ -115,7 +115,7 @@ class IndividualImage(object):
 
         # step 3: on grayscale: Gaussian Blur + Laplacian
         blurredImg = cv2.GaussianBlur(memMappedGrayscale, (self._gaussian_blur_kernel_size, self._gaussian_blur_kernel_size), 0)
-        laplacianGradient = cv2.Laplacian(blurredImg, -1, ksize=3) # ddepth -1 for same as src image (cv2.CV_64F)
+        laplacianGradient = cv2.Laplacian(blurredImg, -1, ksize=self._laplacian_kernel_size) # ddepth -1 for same as src image (cv2.CV_64F)
         memMappedGrayscale[:] = laplacianGradient   # Store processed (grayscale) image
         del memMappedGrayscale
 

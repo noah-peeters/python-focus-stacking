@@ -52,7 +52,7 @@ def main():
     _parser.add_argument(
         "-g",
         "--gaussian",
-        help="Size of gaussian blur kernel.",
+        help="Size of gaussian blur kernel. Odd number, max is 31",
         default=5,
         required=False,
         type=int,
