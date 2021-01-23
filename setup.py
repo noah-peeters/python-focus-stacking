@@ -8,14 +8,14 @@ with open("README.md", "r") as f:
     long_description = f.read()
 
 setup(
-    name="focus-stack",
+    name="focus-stack-concurrent",
     version=__version__,
-    author="Mohit Nalavadi",
-    author_email="mnalavadi@gmail.com",
+    author="Noah Peeters",
+    author_email="noah.peeters+stack@gmail.com",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/momonala/focus-stack",
-    description="Tool to focus stack images.",
+    url="https://github.com/noah-peeters/python-focus-stacking",
+    description="Tool to focus stack images using Dask and Memory mapped structures for better concurrency.",
     packages=setuptools.find_packages(),
     package_dir={"focus_stack": "focus_stack"},
     entry_points={"console_scripts": ["focusstack = focus_stack.run:main"]},

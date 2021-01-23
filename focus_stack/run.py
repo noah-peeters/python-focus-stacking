@@ -16,11 +16,11 @@ logger.setLevel(logging.INFO)
 
 
 def main():
-    _parser = ArgumentParser(prog="Tool to focus stack a list of images.")
+    _parser = ArgumentParser(prog="Focus a stack of images using multiprocessing and memmory mapped .")
     _parser.add_argument(
         "-i",
         "--input",
-        help="directory of images to focus stack",
+        help="directory of alphetically sort images to focus stack",
         required=True,
         type=str,
     )
