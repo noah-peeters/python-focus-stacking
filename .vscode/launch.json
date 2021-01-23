@@ -2,10 +2,10 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Python: NumPyTest.py",
+      "name": "Python: StackImages.py",
       "type": "python",
       "request": "launch",
-      "program": "focus_stack/NumPyTest.py",
+      "program": "focus_stack/StackImages.py",
       "console": "integratedTerminal"
     }
   ]
