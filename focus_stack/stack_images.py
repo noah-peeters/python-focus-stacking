@@ -76,8 +76,8 @@ class FocusStacker(object):
         stacked_image = cv2.cvtColor(outputImage, cv2.COLOR_BGR2RGB) #* PILLOW (PIL) is in RGB and cv2 is in BGR! Image must be converted from BGR to RGB.
 
         #cleanup temp files
-        [image.cleanup_temp_files for image in image_objects]
-
+        for image in image_objects:
+            image.cleanup_temp_files() 
         return Image.fromarray(stacked_image)
 
 
@@ -127,4 +127,6 @@ class IndividualImage(object):
         return _img_raw, _grayscale_raw 
 
     def cleanup_temp_files(self):
-         os.remove(self._temp_filenames)
+        _raw_fn, _grayscale_fn = self._temp_filenames()
+        os.remove(_raw_fn)
+        os.remove(_grayscale_fn)
