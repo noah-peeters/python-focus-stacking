@@ -119,3 +119,4 @@ del memMappedImg
 Image.fromarray(stackedImg).show()
 
 print("--- Created stack in: %s seconds ---" % (time.time() - start_time))
+
