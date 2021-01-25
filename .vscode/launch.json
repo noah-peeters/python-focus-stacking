@@ -2,6 +2,14 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Python: focus_stack",
+      "type": "python",
+      "request": "launch",
+      "module": "focus_stack",
+      "args": ["-i", "HighResImages/", "-o", "/home/noah/Pictures/stackedImage.jpg", "-d", "True", "-g", "5", "-l", "5"],
+      "console": "integratedTerminal"
+    },
+    {
       "name": "Python: StackImages.py",
       "type": "python",
       "request": "launch",
