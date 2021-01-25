@@ -11,7 +11,6 @@ setup(
     name="focus-stack-concurrent",
     version=__version__,
     author="Noah Peeters",
-    author_email="noah.peeters+stack@gmail.com",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/noah-peeters/python-focus-stacking",
