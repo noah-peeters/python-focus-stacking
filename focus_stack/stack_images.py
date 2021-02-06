@@ -46,32 +46,35 @@ class FocusStacker(object):
         logger.info("Reading images")
         image_load = []
         for _, img_fn in enumerate(image_files):
-            _image = ParallelCompute(self._gaussian_blur_kernel_size, self._laplacian_kernel_size)
-            image_load.append(dask.delayed(_image.load_image)(img_fn))
+            #_image = ParallelCompute(self._gaussian_blur_kernel_size, self._laplacian_kernel_size)
+            #image_load.append(dask.delayed(_image.load_image)(img_fn))
+            ParallelCompute(self._gaussian_blur_kernel_size, self._laplacian_kernel_size).load_image(img_fn)
 
         # Load all images in parallel
-        dask.compute(*image_load)
+        #dask.compute(*image_load)
 
     def _align_images(self, image_files):
         logger.info("Aligning images")
-        align_images = []
+        #align_images = []
         for i, img_fn in enumerate(image_files):
             if i != 0:
-                _image = ParallelCompute(self._gaussian_blur_kernel_size, self._laplacian_kernel_size)
-                align_images.append(dask.delayed(_image.align_image)(image_files[i - 1], img_fn))
+                #_image = ParallelCompute(self._gaussian_blur_kernel_size, self._laplacian_kernel_size)
+                #align_images.append(dask.delayed(_image.align_image)(image_files[i - 1], img_fn))
+                ParallelCompute(self._gaussian_blur_kernel_size, self._laplacian_kernel_size).align_image(image_files[i - 1], img_fn)
 
         # Align all images in parallel
-        dask.compute(*align_images)
+        #dask.compute(*align_images)
     
     def _gaussian_blur_and_laplacian_images(self, image_files):
         logger.info("Gaussian blurring images, and calculating their laplacian edges")
         process_images = []
         for i, img_fn in enumerate(image_files):
-            _image = ParallelCompute(self._gaussian_blur_kernel_size, self._laplacian_kernel_size)
-            process_images.append(dask.delayed(_image.gaussian_and_laplacian)(img_fn))
+            #_image = ParallelCompute(self._gaussian_blur_kernel_size, self._laplacian_kernel_size)
+            #process_images.append(dask.delayed(_image.gaussian_and_laplacian)(img_fn))
+            ParallelCompute(self._gaussian_blur_kernel_size, self._laplacian_kernel_size).gaussian_and_laplacian(img_fn)
 
-        # Align all images in parallel
-        dask.compute(*process_images)
+        # Process all images in parallel
+        #dask.compute(*process_images)
 
     def _stack_images(self, image_files):
         logger.info("stacking images")
@@ -113,8 +116,8 @@ class ParallelCompute(object):
     # Align an image to a source image
     def align_image(self, src_imgPath, img_to_align_path):
         # Get previous image (grayscale)
-        _, grayscale_path = self._temp_filenames(src_imgPath)
-        im1_grayscale = numpy.memmap(grayscale_path, mode="r", shape=(IMAGE_HEIGHT, IMAGE_WIDTH))
+        _, prev_grayscale_path = self._temp_filenames(src_imgPath)
+        im1_grayscale = numpy.memmap(prev_grayscale_path, mode="r", shape=(IMAGE_HEIGHT, IMAGE_WIDTH))
         size = im1_grayscale.shape
 
         # Get image to align (grayscale)
@@ -125,13 +128,13 @@ class ParallelCompute(object):
         warp_mode = cv2.MOTION_TRANSLATION
 
         # Define 2x3 or 3x3 matrices and initialize the matrix to identity
-        if warp_mode == cv2.MOTION_HOMOGRAPHY :
+        if warp_mode == cv2.MOTION_HOMOGRAPHY:
             warp_matrix = numpy.eye(3, 3, dtype=numpy.float32)
-        else :
+        else:
             warp_matrix = numpy.eye(2, 3, dtype=numpy.float32)
 
         # Specify the number of iterations
-        number_of_iterations = 1000
+        number_of_iterations = 2500
 
         # Specify the threshold of the increment
         # in the correlation coefficient between two iterations
@@ -192,11 +195,8 @@ class ParallelCompute(object):
 
         # Cleanup temp files
         for i, img_fn in enumerate(image_paths):
-            self.cleanup_temp_files(img_fn)
+            _raw_fn, _grayscale_fn = self._temp_filenames(img_fn)
+            os.remove(_raw_fn)
+            os.remove(_grayscale_fn)
 
         return Image.fromarray(stacked_image)
-
-    def cleanup_temp_files(self, img_fn):
-        _raw_fn, _grayscale_fn = self._temp_filenames(img_fn)
-        os.remove(_raw_fn)
-        os.remove(_grayscale_fn)
