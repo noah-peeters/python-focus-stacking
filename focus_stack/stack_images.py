@@ -39,7 +39,7 @@ class FocusStacker(object):
         self._align_images(sorted_image_paths)
         self._gaussian_blur_and_laplacian_images(sorted_image_paths)
 
-        stacked_image = self._stack_images()
+        stacked_image = self._stack_images(sorted_image_paths)
         return stacked_image
 
     def _load_images(self, image_files):
@@ -75,7 +75,7 @@ class FocusStacker(object):
 
     def _stack_images(self, image_files):
         logger.info("stacking images")
-        ParallelCompute(self._gaussian_blur_kernel_size, self._laplacian_kernel_size).stack_images()
+        return ParallelCompute(self._gaussian_blur_kernel_size, self._laplacian_kernel_size).stack_images(image_files)
 
 class ParallelCompute(object):
     def __init__(
@@ -86,10 +86,6 @@ class ParallelCompute(object):
         self._laplacian_kernel_size = laplacian_kernel_size
         self._gaussian_blur_kernel_size = gaussian_blur_kernel_size
 
-
-    def dimensions(self):
-        return self._height, self._width
-
     def _temp_filenames(self, imPath):
         filename, file_extension = os.path.splitext(imPath)
         return filename + ".raw", filename + ".grayscale.raw"
@@ -99,14 +95,18 @@ class ParallelCompute(object):
         _raw_fn, _grayscale_fn = self._temp_filenames(img_path)
         # Orig image
         image = cv2.imread(img_path)
-        self._height, self._width, channels = image.shape
-        memMappedImg = numpy.memmap(_raw_fn, mode="w+", shape=(self._height, self._width, 3)) # Create a memory mapped array for storing raw image data (matching image dimensions)
+        
+        # Set image size
+        global IMAGE_HEIGHT, IMAGE_WIDTH
+        IMAGE_HEIGHT, IMAGE_WIDTH, channels = image.shape
+
+        memMappedImg = numpy.memmap(_raw_fn, mode="w+", shape=(IMAGE_HEIGHT, IMAGE_WIDTH, 3)) # Create a memory mapped array for storing raw image data (matching image dimensions)
         memMappedImg[:] = numpy.asarray(image)
         del memMappedImg
 
         # Grayscale image
         grayscale = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        memMappedGrayscale = numpy.memmap(_grayscale_fn, mode="w+", shape=(self._height, self._width)) # Create a memory mapped array for storing raw image data (matching image dimensions)
+        memMappedGrayscale = numpy.memmap(_grayscale_fn, mode="w+", shape=(IMAGE_HEIGHT, IMAGE_WIDTH)) # Create a memory mapped array for storing raw image data (matching image dimensions)
         memMappedGrayscale[:] = numpy.asarray(grayscale)
         del memMappedGrayscale
 
@@ -114,12 +114,12 @@ class ParallelCompute(object):
     def align_image(self, src_imgPath, img_to_align_path):
         # Get previous image (grayscale)
         _, grayscale_path = self._temp_filenames(src_imgPath)
-        im1_grayscale = numpy.memmap(grayscale_path, mode="r", shape=(self._height, self._width))
+        im1_grayscale = numpy.memmap(grayscale_path, mode="r", shape=(IMAGE_HEIGHT, IMAGE_WIDTH))
         size = im1_grayscale.shape
 
         # Get image to align (grayscale)
         _, grayscale_path = self._temp_filenames(img_to_align_path)
-        im2_grayscale = numpy.memmap(grayscale_path, mode="r+", shape=(self._height, self._width))
+        im2_grayscale = numpy.memmap(grayscale_path, mode="r+", shape=(IMAGE_HEIGHT, IMAGE_WIDTH))
 
         # Define the motion model
         warp_mode = cv2.MOTION_TRANSLATION
@@ -158,7 +158,7 @@ class ParallelCompute(object):
     def gaussian_and_laplacian(self, img_path):
         _, _grayscale_fn = self._temp_filenames(img_path)
 
-        memMappedGrayscale = numpy.memmap(_grayscale_fn, mode="r+", shape=(self._height, self._width))
+        memMappedGrayscale = numpy.memmap(_grayscale_fn, mode="r+", shape=(IMAGE_HEIGHT, IMAGE_WIDTH))
         blurredImg = cv2.GaussianBlur(memMappedGrayscale, (self._gaussian_blur_kernel_size, self._gaussian_blur_kernel_size), 0)
         laplacianGradient = cv2.Laplacian(blurredImg, -1, ksize=self._laplacian_kernel_size) # ddepth -1 for same as src image (cv2.CV_64F)
 
@@ -171,9 +171,9 @@ class ParallelCompute(object):
         rgb_images = []
         laplacian_gradients = []
         for i, img_fn in enumerate(image_paths):
-            _raw_fn, _grayscale_fn = self._temp_filenames(self._image_filename)
-            rgb_images.append(numpy.memmap(_raw_fn, mode="r", shape=(self._height, self._width, 3)))
-            laplacian_gradients.append(numpy.memmap(_grayscale_fn, mode="r", shape=(self._height, self._width)))
+            _raw_fn, _grayscale_fn = self._temp_filenames(img_fn)
+            rgb_images.append(numpy.memmap(_raw_fn, mode="r", shape=(IMAGE_HEIGHT, IMAGE_WIDTH, 3)))
+            laplacian_gradients.append(numpy.memmap(_grayscale_fn, mode="r", shape=(IMAGE_HEIGHT, IMAGE_WIDTH)))
 
         laplacian_gradients = numpy.asarray(laplacian_gradients)
 
