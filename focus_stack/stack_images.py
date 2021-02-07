@@ -59,7 +59,7 @@ class FocusStacker(object):
             if i != 0:
                 #_image = ParallelCompute(self._gaussian_blur_kernel_size, self._laplacian_kernel_size)
                 #align_images.append(dask.delayed(_image.align_image)(image_files[i - 1], img_fn))
-                ParallelCompute(self._gaussian_blur_kernel_size, self._laplacian_kernel_size).align_image(image_files[0], img_fn)
+                ParallelCompute(self._gaussian_blur_kernel_size, self._laplacian_kernel_size).align_image(image_files[i - 1], img_fn)
 
         # Align all images in parallel
         #dask.compute(*align_images)
@@ -90,11 +90,11 @@ class ParallelCompute(object):
 
     def _temp_filenames(self, imPath):
         filename, file_extension = os.path.splitext(imPath)
-        return filename + ".raw", filename + ".grayscale.raw"
+        return filename + ".raw", filename + ".raw.grayscale", filename + ".raw.aligned", filename + ".raw.grayscale.laplacian"
 
     # Read image and save to disk (memmap)
     def load_image(self, img_path):
-        _raw_fn, _grayscale_fn = self._temp_filenames(img_path)
+        _raw_fn, _grayscale_fn, _, _ = self._temp_filenames(img_path)
         # RGB image
         image = cv2.imread(img_path)
         
@@ -116,23 +116,27 @@ class ParallelCompute(object):
     def align_image(self, src_img_path, img_to_align_path):
         logger.info("Aligning " + img_to_align_path + " to: " + src_img_path)
 
-        _raw_fn, _ = self._temp_filenames(src_img_path)
-        im1 =  numpy.memmap(_raw_fn, mode="r", shape = (IMAGE_HEIGHT, IMAGE_WIDTH, 3))
+        # Read previously aligned image
+        _raw_fn, _, _raw_aligned, _ = self._temp_filenames(src_img_path)
+        if os.path.isfile(_raw_aligned):
+            img1 = numpy.memmap(_raw_aligned, mode="r", shape = (IMAGE_HEIGHT, IMAGE_WIDTH, 3))
+        else:
+            img1 = numpy.memmap(_raw_fn, mode="r", shape = (IMAGE_HEIGHT, IMAGE_WIDTH, 3))
 
-        _raw_fn, _grayscale_fn = self._temp_filenames(img_to_align_path)
+        _raw_fn, _, _, _ = self._temp_filenames(img_to_align_path)
         im2 =  numpy.memmap(_raw_fn, mode="r+", shape = (IMAGE_HEIGHT, IMAGE_WIDTH, 3))
 
         # Convert images to grayscale
-        im1_gray = cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY)
+        im1_gray = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
         im2_gray = cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY)
 
         # Define the motion model
         warp_mode = cv2.MOTION_TRANSLATION
 
         # Define 2x3 or 3x3 matrices and initialize the matrix to identity
-        if warp_mode == cv2.MOTION_HOMOGRAPHY :
+        if warp_mode == cv2.MOTION_HOMOGRAPHY:
             warp_matrix = numpy.eye(3, 3, dtype=numpy.float32)
-        else :
+        else:
             warp_matrix = numpy.eye(2, 3, dtype=numpy.float32)
 
         # Specify the number of iterations.
@@ -146,34 +150,38 @@ class ParallelCompute(object):
         criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, number_of_iterations,  termination_eps)
 
         # Run the ECC algorithm. The results are stored in warp_matrix.
-        _, warp_matrix = cv2.findTransformECC(im1_gray, im2_gray,warp_matrix, warp_mode, criteria, None, 5)
+        _, warp_matrix = cv2.findTransformECC(im1_gray, im2_gray, warp_matrix, warp_mode, criteria, None, 5)
 
         if warp_mode == cv2.MOTION_HOMOGRAPHY:
             # Use warpPerspective for Homography 
-            im2_aligned = cv2.warpPerspective(im2, warp_matrix, (IMAGE_WIDTH, IMAGE_HEIGHT), flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
+            aligned_image = cv2.warpPerspective(im2, warp_matrix, (IMAGE_WIDTH, IMAGE_HEIGHT), flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
         else:
             # Use warpAffine for Translation, Euclidean and Affine
-            im2_aligned = cv2.warpAffine(im2, warp_matrix, (IMAGE_WIDTH, IMAGE_HEIGHT), flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
+            aligned_image = cv2.warpAffine(im2, warp_matrix, (IMAGE_WIDTH, IMAGE_HEIGHT), flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
 
         # Write aligned RGB image
-        im2[:] = im2_aligned
+        _, _, _raw_aligned, _ = self._temp_filenames(img_to_align_path)
+        im2_aligned = numpy.memmap(_raw_aligned, mode="w+", shape=(IMAGE_HEIGHT, IMAGE_WIDTH, 3))
+        im2_aligned[:] = aligned_image
 
-        #im2_gray =  numpy.memmap(_grayscale_fn, mode="r+", shape = (IMAGE_HEIGHT, IMAGE_WIDTH))
-        #im2_gray[:] = cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY)
-
-        del im1
+        del img1
         del im2
+        del im2_aligned
 
     # Gaussian blur images and get their edges using a Laplacian gradient
     def gaussian_and_laplacian(self, img_path):
-        _, _grayscale_fn = self._temp_filenames(img_path)
+        _, _grayscale_fn, _, _laplacian_fn = self._temp_filenames(img_path)
 
         memMappedGrayscale = numpy.memmap(_grayscale_fn, mode="r+", shape=(IMAGE_HEIGHT, IMAGE_WIDTH))
         blurredImg = cv2.GaussianBlur(memMappedGrayscale, (self._gaussian_blur_kernel_size, self._gaussian_blur_kernel_size), 0)
         laplacianGradient = cv2.Laplacian(blurredImg, -1, ksize=self._laplacian_kernel_size) # ddepth -1 for same as src image (cv2.CV_64F)
 
-        memMappedGrayscale[:] = laplacianGradient # Overwrite grayscale to Laplacian gradient
+        laplacianGradientMemmap = numpy.memmap(_laplacian_fn, mode="w+", shape=(IMAGE_HEIGHT, IMAGE_WIDTH))
+        laplacianGradientMemmap[:] = laplacianGradient # Write to memmap
+
         del memMappedGrayscale
+        del laplacianGradientMemmap
+
 
     # Stack images and cleanup temporary files  
     def stack_images(self, image_paths):
@@ -181,9 +189,13 @@ class ParallelCompute(object):
         rgb_images = []
         laplacian_gradients = []
         for i, img_fn in enumerate(image_paths):
-            _raw_fn, _grayscale_fn = self._temp_filenames(img_fn)
-            rgb_images.append(numpy.memmap(_raw_fn, mode="r", shape=(IMAGE_HEIGHT, IMAGE_WIDTH, 3)))
-            laplacian_gradients.append(numpy.memmap(_grayscale_fn, mode="r", shape=(IMAGE_HEIGHT, IMAGE_WIDTH)))
+            _raw_fn, _, _raw_aligned_fn, _laplacian_fn = self._temp_filenames(img_fn)
+            
+            if os.path.isfile(_raw_aligned_fn): # First image is never aligned
+                rgb_images.append(numpy.memmap(_raw_aligned_fn, mode="r", shape=(IMAGE_HEIGHT, IMAGE_WIDTH, 3)))
+            else:
+                rgb_images.append(numpy.memmap(_raw_fn, mode="r", shape=(IMAGE_HEIGHT, IMAGE_WIDTH, 3)))
+            laplacian_gradients.append(numpy.memmap(_laplacian_fn, mode="r", shape=(IMAGE_HEIGHT, IMAGE_WIDTH)))
 
         laplacian_gradients = numpy.asarray(laplacian_gradients)
 
@@ -201,9 +213,11 @@ class ParallelCompute(object):
         stacked_image = cv2.cvtColor(outputImage, cv2.COLOR_BGR2RGB) # PILLOW (PIL) is in RGB and cv2 is in BGR! Image must be converted from BGR to RGB.
 
         # Cleanup temp files
-        # for i, img_fn in enumerate(image_paths):
-        #     _raw_fn, _grayscale_fn = self._temp_filenames(img_fn)
-        #     os.remove(_raw_fn)
-        #     os.remove(_grayscale_fn)
+        for i, img_fn in enumerate(image_paths):
+            _raw_fn, _grayscale_fn, _raw_aligned_fn, _laplacian_fn = self._temp_filenames(img_fn)
+            os.remove(_raw_fn)
+            os.remove(_grayscale_fn)
+            os.remove(_raw_aligned_fn)
+            os.remove(_laplacian_fn)
 
         return Image.fromarray(stacked_image)
