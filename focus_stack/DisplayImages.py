@@ -3,6 +3,7 @@ from napari.qt.threading import thread_worker
 import numpy
 import glob
 from PIL import Image
+import os
 
 
 IMAGE_DIR = "HighResImages/*.jpg"
@@ -16,6 +17,9 @@ for index, imPath in enumerate(imgFileList):
         image = Image.open(imPath)
         imageWidth, imageHeight = image.size
 
+def temp_filenames(imPath):
+    filename, file_extension = os.path.splitext(imPath)
+    return filename + ".raw", filename + ".grayscale.raw"
 
 
 with napari.gui_qt():
@@ -35,7 +39,7 @@ with napari.gui_qt():
 
     @thread_worker(connect={"returned": stackedImghandler})
     def loadStackedImage():
-        return numpy.memmap("stacked.img", mode="r", shape=(imageHeight, imageWidth, 3))
+        return numpy.memmap("stacked.raw", mode="r", shape=(imageHeight, imageWidth, 3))
 
     @thread_worker(connect={"returned": origImagesHandler})
     def loadImages():
@@ -43,7 +47,8 @@ with napari.gui_qt():
 
         imgFileList = glob.glob(IMAGE_DIR)
         for imPath in sorted(imgFileList):
-            images.append(numpy.memmap(imPath + ".img", mode="r", shape=(imageHeight, imageWidth, 3)))
+            raw_fn, grayscale_fn = temp_filenames(imPath)
+            images.append(numpy.memmap(raw_fn, mode="r", shape=(imageHeight, imageWidth, 3)))
 
         return numpy.asarray(images)
 
@@ -53,11 +58,12 @@ with napari.gui_qt():
 
         imgFileList = glob.glob(IMAGE_DIR)
         for imPath in sorted(imgFileList):
-            grayscales.append(numpy.memmap(imPath + ".grayscale", mode="r", shape=(imageHeight, imageWidth)))
+            raw_fn, grayscale_fn = temp_filenames(imPath)
+            grayscales.append(numpy.memmap(grayscale_fn, mode="r", shape=(imageHeight, imageWidth)))
 
         return numpy.asarray(grayscales)
 
     # Run threaded functions
-    loadStackedImage()
+    #loadStackedImage()
     loadImages()
     loadGrayscaleImages()
