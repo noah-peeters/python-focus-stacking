@@ -6,7 +6,7 @@
       "type": "python",
       "request": "launch",
       "module": "focus_stack",
-      "args": ["-i", "HighResImages/", "-o", "/home/noah/Pictures/Not_Aligned.jpg", "-g", "5", "-l", "5"],
+      "args": ["-i", "images/", "-o", "/home/noah/Pictures/Aligned.jpg", "-g", "5", "-l", "5"],
       "console": "integratedTerminal"
     },
     {

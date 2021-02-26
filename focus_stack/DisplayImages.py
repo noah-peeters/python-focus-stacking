@@ -6,7 +6,7 @@ from PIL import Image
 import os
 
 
-IMAGE_DIR = "images/*.jpg"
+IMAGE_DIR = "HighResImages/*.jpg"
 
 imageHeight = None
 imageWidth = None
@@ -82,17 +82,18 @@ with napari.gui_qt():
 
     @thread_worker(connect={"returned": laplacianGradientsHandler})
     def load_laplacian_gradients():
-        grayscales = []
+        laplacians = []
 
         imgFileList = glob.glob(IMAGE_DIR)
         for imPath in sorted(imgFileList):
-            _, _, _aligned_fn, _ = temp_filenames(imPath)
-            grayscales.append(numpy.memmap(_aligned_fn, mode="r", shape=(imageHeight, imageWidth)))
+            _, _, _, _laplacian_fn = temp_filenames(imPath)
+            laplacians.append(numpy.memmap(_laplacian_fn, mode="r", shape=(imageHeight, imageWidth)))
 
-        return numpy.asarray(grayscales)
+        return numpy.asarray(laplacians)
 
     # Run threaded functions
     #loadStackedImage()
     load_source_images()
     load_grayscale_images()
     load_aligned_images()
+    load_laplacian_gradients()
