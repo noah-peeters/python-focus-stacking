@@ -68,7 +68,7 @@ def align_images(images):
     im0 = images[round(len(images)/2)]
     aligned_image_list = []
     for im in images:
-        print('   ALIGNING image')
+        print('ALIGNING image')
         aligned_image_list.append(align(im0, im))
     return aligned_image_list
 
@@ -89,7 +89,7 @@ def doLap(image):
 #   This routine finds the points of best focus in all images and produces a merged result...
 #
 def focus_stack(unimages):
-    images = align_images(unimages)
+    images = align_images(unimages) # Focus stack all RGB images
 
     print('FOCUS-STACKING')
     laps = []
@@ -101,11 +101,15 @@ def focus_stack(unimages):
 
     output = np.zeros(shape=images[0].shape, dtype=images[0].dtype)
 
+    count = 0
     for y in range(0,images[0].shape[0]):
         for x in range(0, images[0].shape[1]):
             yxlaps = abs(laps[:, y, x])
             index = (np.where(yxlaps == max(yxlaps)))[0][0]
             output[y,x] = images[index][y,x]
+            count += 1
+
+    print(count)
     return output
 
 file_name_pattern = '*.jpg'
