@@ -47,9 +47,6 @@ def main():
         "-o", "--output", help="Name of output image.", required=True, type=str,
     )
     _parser.add_argument(
-        "-d", "--debug", help="Debug mode.", default=False, required=False, type=bool,
-    )
-    _parser.add_argument(
         "-g",
         "--gaussian",
         help="Size of gaussian blur kernel. Odd number, max is 31",
@@ -60,7 +57,7 @@ def main():
     _parser.add_argument(
         "-l",
         "--laplacian",
-        help="Size of laplacian gradient kernel.",
+        help="Size of laplacian gradient kernel. Odd number.",
         default=5,
         required=False,
         type=int,
