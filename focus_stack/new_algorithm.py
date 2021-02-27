@@ -32,11 +32,11 @@ def load_images():
 
         # Write to disk (memmap)
         memmapped_rgb = np.memmap(image_path + rgb_memmap_extension, mode="w+", shape=SHAPE)
-        memmapped_rgb[:] = np.asarray(image_rgb)
+        memmapped_rgb[:] = image_rgb
         del memmapped_rgb
 
         memmapped_grayscale = np.memmap(image_path + grayscale_memmap_extension, mode="w+", shape=(SHAPE[0], SHAPE[1]))
-        memmapped_grayscale[:] = np.asarray(image_grayscale)
+        memmapped_grayscale[:] = image_grayscale
         del memmapped_grayscale
 
     # Load all images in parallel
@@ -98,7 +98,7 @@ def align_images(image_paths):
             im2_aligned = cv2.warpAffine(im2_rgb, warp_matrix, (SHAPE[1], SHAPE[0]), flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
         
         # Overwrite RGB memmap of second image
-        im2_rgb[:] = np.asarray(im2_aligned)
+        im2_rgb[:] = im2_aligned
 
         del im1_gray
         del im2_gray
@@ -117,18 +117,16 @@ def align_images(image_paths):
 def calculate_edges_laplacian(image_paths):
     def calculate_single_laplacian(image_path):
         global SHAPE
-        grayscale_image = np.memmap(image_path + grayscale_memmap_extension, mode="r+", shape=(SHAPE[0], SHAPE[1]))
+        grayscale_image = np.memmap(image_path + grayscale_memmap_extension, mode="r", shape=(SHAPE[0], SHAPE[1]))
         blurred = cv2.GaussianBlur(grayscale_image, (gaussian_blur_size, gaussian_blur_size), 0)
         laplacian = cv2.Laplacian(blurred, cv2.CV_64F, ksize=laplacian_kernel_size)
 
         # Write to disk
-        memmapped_laplacian = np.memmap(image_path + laplacian_memmap_extension, mode="w+", shape=(SHAPE[0], SHAPE[1]))
-        memmapped_laplacian[:] = np.asarray(laplacian)
-        print(np.array_equal(memmapped_laplacian, laplacian))
-        #print(memmapped_laplacian.shape, laplacian.shape)
+        memmapped_laplacian = np.memmap(image_path + laplacian_memmap_extension, mode="w+", shape=(SHAPE[0], SHAPE[1]), dtype="float64") # dtype="float64"!!
+        memmapped_laplacian[:] = laplacian
 
+        del grayscale_image
         del memmapped_laplacian
-
 
     # Compute in parallel
     laplacians = []
@@ -157,7 +155,6 @@ def focus_stack(image_paths):
             index = (np.where(yxlaps == max(yxlaps)))[0][0]
             output[y, x] = images[index][y, x]              # Write focus part to image
     return output
-
 
 print('LOADING files in {}'.format(directory_name))
 image_paths = load_images()             # Write all images to memmap's

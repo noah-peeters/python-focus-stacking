@@ -82,7 +82,7 @@ def doLap(image):
                             # Generally, keeping these two values the same or very close works well
                             # Also, odd numbers, please...
 
-    blurred = cv2.GaussianBlur(image, (blur_size,blur_size), 0)
+    blurred = cv2.GaussianBlur(image, (blur_size, blur_size), 0)
     return cv2.Laplacian(blurred, cv2.CV_64F, ksize=kernel_size)
 
 #
@@ -113,7 +113,7 @@ def focus_stack(unimages):
     return output
 
 file_name_pattern = '*.jpg'
-for dir_name in ['images']:
+for dir_name in ['HighResImages']:
     print('LOADING files in {}'.format(dir_name))
     images = load_images(dir_name, file_name_pattern)
     im = focus_stack(images)
