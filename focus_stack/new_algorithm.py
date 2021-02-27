@@ -145,7 +145,7 @@ def focus_stack(image_paths):
         global SHAPE
         images.append(np.memmap(im_path + rgb_memmap_extension, mode="r", shape=SHAPE))
         laplacians.append(np.memmap(im_path + laplacian_memmap_extension, mode="r", shape=(SHAPE[0], SHAPE[1])))
-        
+
     laplacians = np.asarray(laplacians)
     output = np.zeros(shape=images[0].shape, dtype=images[0].dtype)
 
@@ -153,7 +153,8 @@ def focus_stack(image_paths):
         for x in range(0, images[0].shape[1]):              # Loop through horizontal pixels (rows)
             yxlaps = abs(laplacians[:, y, x])               # Absolute value of laplacian at this pixel
             index = (np.where(yxlaps == max(yxlaps)))[0][0]
-            output[y, x] = images[index][y, x]              # Write focus part to image
+            output[y, x] = images[index][y, x]              # Write focus pixel to output image
+    
     return output
 
 print('LOADING files in {}'.format(directory_name))
@@ -164,7 +165,7 @@ im = focus_stack(image_paths)
 
 # Save image to disk
 im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
-cv2.imwrite(directory_name+'/focus_stacked.jpg', im) 
+cv2.imwrite(directory_name + "/focus_stacked.jpg", im) 
 
 # Cleanup memmapped (binary) files
 for im_path in image_paths:
