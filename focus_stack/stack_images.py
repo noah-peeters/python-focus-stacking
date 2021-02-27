@@ -7,8 +7,6 @@ https://github.com/cmcguinness/focusstack
 from typing import List
 import numpy
 import dask
-import glob
-import time
 import cv2
 import os
 from PIL import Image
