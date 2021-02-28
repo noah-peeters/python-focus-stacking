@@ -4,7 +4,7 @@ import os
 import glob
 import dask
 
-directory_name = "images"   # Directory to search in
+directory_name = "HighResImages"   # Directory to search in
 file_name_pattern = '*.jpg' # Extension of images to search for
 laplacian_kernel_size = 5   # SIze of laplacian kernel
 gaussian_blur_size = 5      # Size of gaussian blur
@@ -50,7 +50,7 @@ def load_images():
 
     return image_paths  # Return listing of images
 
-# Align images in parallel (to middle of stack)
+# Align images (to middle of stack)
 def align_images(image_paths):
     print("Aligning Images")
 
@@ -106,12 +106,13 @@ def align_images(image_paths):
 
     # Compute in parallel
     im0_path = image_paths[round(len(image_paths)/2)] # Middle image
-    aligning = []
+    #aligning = []
     for im_path in image_paths:
         if im_path != im0_path:
-            aligning.append(dask.delayed(align_single_image)(im0_path, im_path))
+            align_single_image(im0_path, im_path)
+            #aligning.append(dask.delayed(align_single_image)(im0_path, im_path))
     
-    dask.compute(*aligning)
+    #dask.compute(*aligning)
 
 # Calculate edges using laplacian filter, from grayscale
 def calculate_edges_laplacian(image_paths):
@@ -138,15 +139,15 @@ def calculate_edges_laplacian(image_paths):
 # Find points of highest focus and merge them into a new image
 def focus_stack(image_paths):
     print("Focus stacking...")
-
     images = []
     laplacians = []
     for im_path in image_paths:
         global SHAPE
         images.append(np.memmap(im_path + rgb_memmap_extension, mode="r", shape=SHAPE))
-        laplacians.append(np.memmap(im_path + laplacian_memmap_extension, mode="r", shape=(SHAPE[0], SHAPE[1])))
+        laplacians.append(np.memmap(im_path + laplacian_memmap_extension, mode="r", shape=(SHAPE[0], SHAPE[1]), dtype="float64"))
 
     laplacians = np.asarray(laplacians)
+
     output = np.zeros(shape=images[0].shape, dtype=images[0].dtype)
 
     for y in range(0, images[0].shape[0]):                  # Loop through vertical pixels (columns)
@@ -158,9 +159,9 @@ def focus_stack(image_paths):
     return output
 
 print('LOADING files in {}'.format(directory_name))
-image_paths = load_images()             # Write all images to memmap's
-align_images(image_paths)               # Align images
-calculate_edges_laplacian(image_paths)  # Calculate edges with a laplacian gradient 
+image_paths = load_images()                             # Write all images to memmap's
+align_images(image_paths)                               # Align images
+calculate_edges_laplacian(image_paths)     # Calculate edges with a laplacian gradient 
 im = focus_stack(image_paths)
 
 # Save image to disk
@@ -170,6 +171,7 @@ cv2.imwrite(directory_name + "/focus_stacked.jpg", im)
 # Cleanup memmapped (binary) files
 for im_path in image_paths:
     for ext in memmap_extensions:
-        os.remove(im_path + ext)
+        if os.path.exists(im_path + ext):
+            os.remove(im_path + ext)
 
 print("Stacking completed")
