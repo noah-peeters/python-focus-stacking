@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1174</width>
-    <height>836</height>
+    <width>1210</width>
+    <height>839</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -67,11 +67,11 @@ color: rgb(255, 255, 255);</string>
       <x>0</x>
       <y>40</y>
       <width>251</width>
-      <height>341</height>
+      <height>203</height>
      </rect>
     </property>
     <property name="sizePolicy">
-     <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+     <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
       <horstretch>0</horstretch>
       <verstretch>0</verstretch>
      </sizepolicy>
@@ -88,7 +88,7 @@ color: rgb(255, 255, 255);</string>
        <x>0</x>
        <y>0</y>
        <width>249</width>
-       <height>339</height>
+       <height>201</height>
       </rect>
      </property>
      <layout class="QVBoxLayout" name="verticalLayout">
@@ -105,7 +105,15 @@ color: rgb(255, 255, 255);</string>
        <number>0</number>
       </property>
       <item>
-       <widget class="QListWidget" name="loaded_images_list_widget"/>
+       <layout class="QVBoxLayout" name="verticalLayout_2">
+        <item>
+         <widget class="QPushButton" name="pushButton">
+          <property name="text">
+           <string>PushButton</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
       </item>
      </layout>
     </widget>
@@ -116,7 +124,7 @@ color: rgb(255, 255, 255);</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1174</width>
+     <width>1210</width>
      <height>22</height>
     </rect>
    </property>

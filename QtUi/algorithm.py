@@ -12,54 +12,23 @@ class MainAlgorithm:
         self.loaded_image_paths = []
         self.image_shape = []
 
-    # Load images
-    def load_images(self, image_paths):
-        def load_single_image(image_path):
-            # Load in memory using cv2
-            image_bgr = cv2.imread(image_path)
-            image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-            image_grayscale = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
-            self.image_shape = image_bgr.shape
+    # Load a single image
+    def load_image(self, image_path):
+        print(image_path)
+        # Load in memory using cv2
+        image_bgr = cv2.imread(image_path)
+        image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+        image_grayscale = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+        self.image_shape = image_bgr.shape
 
-            # Write to disk (memmap)
-            memmapped_rgb = np.memmap(image_path + rgb_memmap_extension, mode="w+", shape=self.image_shape)
-            memmapped_rgb[:] = image_rgb
-            del memmapped_rgb
+        # Write to disk (memmap)
+        memmapped_rgb = np.memmap(image_path + rgb_memmap_extension, mode="w+", shape=self.image_shape)
+        memmapped_rgb[:] = image_rgb
+        del memmapped_rgb
 
-            memmapped_grayscale = np.memmap(image_path + grayscale_memmap_extension, mode="w+", shape=(self.image_shape[0], self.image_shape[1]))
-            memmapped_grayscale[:] = image_grayscale
-            del memmapped_grayscale
-
-
-        # Load all images in parallel
-        image_paths.sort()
-        processes = []
-        for image_path in image_paths:
-            processes.append(dask.delayed(load_single_image)(image_path))
-
-        dask.compute(*processes)
-
-        self.loaded_image_paths = image_paths
-
-    @dask.delayed
-    def load_images_generator(self, image_paths):
-        for image_path in image_paths:
-            # Load in memory using cv2
-            image_bgr = cv2.imread(image_path)
-            image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-            image_grayscale = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
-            self.image_shape = image_bgr.shape
-
-            # Write to disk (memmap)
-            memmapped_rgb = np.memmap(image_path + rgb_memmap_extension, mode="w+", shape=self.image_shape)
-            memmapped_rgb[:] = image_rgb
-            del memmapped_rgb
-
-            memmapped_grayscale = np.memmap(image_path + grayscale_memmap_extension, mode="w+", shape=(self.image_shape[0], self.image_shape[1]))
-            memmapped_grayscale[:] = image_grayscale
-            del memmapped_grayscale
-
-            yield image_path # Return image path that has loaded (for progress bar)
+        memmapped_grayscale = np.memmap(image_path + grayscale_memmap_extension, mode="w+", shape=(self.image_shape[0], self.image_shape[1]))
+        memmapped_grayscale[:] = image_grayscale
+        del memmapped_grayscale
     
     # Align loaded images
     def align_images(self):
