@@ -5,7 +5,7 @@ import glob
 import dask
 import time
 
-directory_name = "HighResImages"    # Directory to search in
+directory_name = "images"    # Directory to search in
 file_name_pattern = '*.jpg'         # Extension of images to search for
 laplacian_kernel_size = 5           # SIze of laplacian kernel
 gaussian_blur_size = 5              # Size of gaussian blur
@@ -23,6 +23,7 @@ start_time = time.time()
 # Load images (RGB and Grayscale) and write them to disk (seperately) parrallelized using Dask
 def load_images():
     print("Loading Images")
+    load_images_start_time = time.time()
     def load_single_image(image_path):
         print("Loading: " + image_path)
         global SHAPE
@@ -49,6 +50,7 @@ def load_images():
         images.append(dask.delayed(load_single_image)(image_path))
 
     dask.compute(*images)
+    print(time.time() - load_images_start_time)
     return image_paths  # Return listing of images
 
 # Align images (to middle of stack)

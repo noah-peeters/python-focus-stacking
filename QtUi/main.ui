@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1153</width>
-    <height>842</height>
+    <width>1174</width>
+    <height>836</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -58,18 +58,57 @@ color: rgb(255, 255, 255);</string>
      <set>Qt::AlignCenter</set>
     </property>
    </widget>
-   <widget class="QTableWidget" name="loaded_images_table_widget">
+   <widget class="QScrollArea" name="scrollArea">
+    <property name="enabled">
+     <bool>true</bool>
+    </property>
     <property name="geometry">
      <rect>
       <x>0</x>
       <y>40</y>
       <width>251</width>
-      <height>321</height>
+      <height>341</height>
      </rect>
+    </property>
+    <property name="sizePolicy">
+     <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+      <horstretch>0</horstretch>
+      <verstretch>0</verstretch>
+     </sizepolicy>
     </property>
     <property name="horizontalScrollBarPolicy">
      <enum>Qt::ScrollBarAlwaysOff</enum>
     </property>
+    <property name="widgetResizable">
+     <bool>true</bool>
+    </property>
+    <widget class="QWidget" name="scrollAreaWidgetContents">
+     <property name="geometry">
+      <rect>
+       <x>0</x>
+       <y>0</y>
+       <width>249</width>
+       <height>339</height>
+      </rect>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout">
+      <property name="spacing">
+       <number>1</number>
+      </property>
+      <property name="leftMargin">
+       <number>2</number>
+      </property>
+      <property name="rightMargin">
+       <number>2</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QListWidget" name="loaded_images_list_widget"/>
+      </item>
+     </layout>
+    </widget>
    </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
@@ -77,7 +116,7 @@ color: rgb(255, 255, 255);</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1153</width>
+     <width>1174</width>
      <height>22</height>
     </rect>
    </property>
