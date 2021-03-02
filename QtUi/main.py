@@ -72,13 +72,48 @@ class Worker(QRunnable):
         try:
             result = self.fn(*self.args, **self.kwargs)
         except:
+            # Return error
             traceback.print_exc()
             exctype, value = sys.exc_info()[:2]
             self.signals.error.emit((exctype, value, traceback.format_exc()))
         else:
             self.signals.result.emit(result)  # Return the result of the processing
         finally:
-            self.signals.finished.emit()  # Done
+            self.signals.finished.emit()
+
+class LoadImages(QThread):
+    indexChanged = pyqtSignal(int)
+    finished = pyqtSignal(list)
+
+    def __init__(self, files):
+        super(LoadImages, self).__init__()
+
+        self.files = files
+        self.is_killed = False
+
+        # Initialize algorithm
+        from QtUi.algorithm import MainAlgorithm
+        self.Algorithm = MainAlgorithm()
+
+    def run(self):
+        start_time = time.time()
+        counter = 0
+        for i, image_path in enumerate(self.files):
+            bool = self.Algorithm.load_image(image_path)
+
+            if not bool or self.is_killed: # Operation failed or stopped from UI
+                break
+
+            counter += 1
+            # Send progress back to UI
+            self.indexChanged.emit(i)
+
+        execution_time = round(time.time() - start_time, 2) # Execution time
+        success = counter == len(self.files)                # All files loaded? no: display error, yes: display success
+        self.finished.emit([execution_time, success, self.is_killed])
+    
+    def kill(self):
+        self.is_killed = True
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -91,10 +126,6 @@ class MainWindow(QMainWindow):
         self.export_output_action.triggered.connect(self.export_output)
 
         self.show()
-
-        self.threadpool = QThreadPool()
-        print("Multithreading with maximum %d threads" % self.threadpool.maxThreadCount())
-
 
         # Initialize algorithm
         from QtUi.algorithm import MainAlgorithm
@@ -126,58 +157,58 @@ class MainWindow(QMainWindow):
         # load images and prompt loading screen
         image_progress = QProgressDialog("Loading... ", "Cancel", 0, len(files), self)
         image_progress.setWindowTitle("Loading " + str(len(files)) + " images..., Total size: " + str(total_size) + " MB")
+        image_progress.setLabelText("Preparing to load your images. This shouldn't take long. Please wait.")
         image_progress.setValue(0)
         image_progress.setWindowModality(Qt.WindowModal)
 
-        start_time = time.time()
-
-        # Load images (separate thread)
-        def process(progress_callback):
-            for i, image_path in enumerate(files):
-                self.Algorithm.load_image(image_path)
-                progress_callback.emit(i)
-
-                if image_progress.wasCanceled():
-                    break
-
-        # Update progress bar display
-        counter = 0
-        def update_progress(index_of_file):
-            nonlocal counter
+        def update_progress(new_index):
             # update label text
-            image_progress.setLabelText("Just loaded: " + self.Utilities.get_file_name(files[index_of_file]))
+            image_progress.setLabelText("Just loaded: " + self.Utilities.get_file_name(files[new_index]))
 
             # Update progress slider
-            counter += 1
-            image_progress.setValue(counter)
+            image_progress.setValue(new_index + 1) # +1 as python lists start at 0
 
-        # Create info message about finished operation
-        def create_info():
-            # Display information dialog
-            message = QMessageBox()
-            message.setIcon(QMessageBox.Information)
-            message.setWindowTitle("Images loaded successfully!")
-            message.setText(str(len(files)) + " images have been loaded.")
-            message.setInformativeText("Execution time: " + self.Utilities.format_seconds(round(time.time() - start_time, 2)))
-            # Get names of files
-            file_names = []
-            for image_path in files:
-                file_names.append(self.Utilities.get_file_name(image_path) + ", ")
-            # Display names inside "Detailed text"
-            message.setDetailedText(''.join(str(file) for file in file_names))
-            message.setStandardButtons(QMessageBox.Ok)
+        def create_message(l):
+            message = None
+            image_progress.close() # Hide progress bar
+
+            execution_time = l[0]
+            success = l[1]
+            killed_by_user = l[2]
+            if success: # Display success message
+                message = QMessageBox()
+                message.setIcon(QMessageBox.Information)
+                message.setWindowTitle("Images loaded successfully!")
+                message.setText(str(len(files)) + " images have been loaded.")
+                message.setInformativeText("Execution time: " + self.Utilities.format_seconds(execution_time))
+                # Get names of files
+                file_names = []
+                for image_path in files:
+                    file_names.append(self.Utilities.get_file_name(image_path) + ", ")
+                # Display names inside "Detailed text"
+                message.setDetailedText(''.join(str(file) for file in file_names))
+                message.setStandardButtons(QMessageBox.Ok)
+
+            elif not killed_by_user: # Display error message (error occured)
+                message = QMessageBox()
+                message.setIcon(QMessageBox.Critical)
+                message.setWindowTitle("An error has occured!")
+                message.setText("Something went wrong while loading your images! Please try again later.")
+            else: # User has stopped process. confirm
+                message = QMessageBox()
+                message.setIcon(QMessageBox.Information)
+                message.setWindowTitle("Cancelled operation.")
+                message.setText("Image loading was successfully canceled by user. Images that were loaded before canceling are still available.")
+
             message.exec_()
 
-        # Run process on separate thread
-        worker = Worker(process)
-        worker.signals.finished.connect(create_info)
-        worker.signals.progress.connect(update_progress)
+        loading = LoadImages(files)
+        loading.indexChanged.connect(update_progress)   # Update progress callback
+        loading.finished.connect(create_message)        # Create message
+        image_progress.canceled.connect(loading.kill)   # Stop image loading on cancel
+        loading.start()
 
-        self.threadpool.start(worker)
-
-        # Show progress bar
         image_progress.exec_()
-
 
     def save_project(self):
         print("Saving project")

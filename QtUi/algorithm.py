@@ -14,7 +14,6 @@ class MainAlgorithm:
 
     # Load a single image
     def load_image(self, image_path):
-        print(image_path)
         # Load in memory using cv2
         image_bgr = cv2.imread(image_path)
         image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
@@ -29,6 +28,8 @@ class MainAlgorithm:
         memmapped_grayscale = np.memmap(image_path + grayscale_memmap_extension, mode="w+", shape=(self.image_shape[0], self.image_shape[1]))
         memmapped_grayscale[:] = image_grayscale
         del memmapped_grayscale
+
+        return True # Successfully loaded image to memmap
     
     # Align loaded images
     def align_images(self):
