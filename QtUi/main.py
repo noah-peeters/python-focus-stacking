@@ -42,7 +42,7 @@ class LoadImages(qtc.QThread):
 
         # Operation ended
         self.finished.emit({
-            "execution_time": round(time.time() - start_time, 2), 
+            "execution_time": round(time.time() - start_time, 4), 
             "image_table": image_table, 
             "killed_by_user": self.is_killed
             }
@@ -68,7 +68,7 @@ class AlignImages(qtc.QThread):
         start_time = time.time()
         image0 = self.files[round(len(self.files)/2)] # Get middle image
         aligned_images = [] # Table for processed images (to check if all have been loaded)
-        for i, image_path in enumerate(self.files):
+        for image_path in self.files:
             image0, image1, success = self.Algorithm.align_image(image0, image_path)
 
             if not success or self.is_killed: # Operation failed or stopped from UI
@@ -80,8 +80,73 @@ class AlignImages(qtc.QThread):
 
         # Operation ended
         self.finished.emit({
-            "execution_time": round(time.time() - start_time, 2), 
+            "execution_time": round(time.time() - start_time, 4), 
             "image_table": aligned_images, 
+            "killed_by_user": self.is_killed
+            }
+        )
+    
+    def kill(self):
+        self.is_killed = True
+
+class StackImages(qtc.QThread):
+    finishedImage = qtc.pyqtSignal(str)
+    finished_laplacian = qtc.pyqtSignal(bool)
+    row_update = qtc.pyqtSignal(int)
+    finished = qtc.pyqtSignal(dict)
+
+    def __init__(self, files, gaussian_blur_size, laplacian_kernel_size, algorithm):
+        super().__init__()
+
+        self.files = files
+        self.gaussian_blur_size = gaussian_blur_size
+        self.laplacian_kernel_size = laplacian_kernel_size
+        self.is_killed = False
+
+        # Initialize algorithm
+        self.Algorithm = algorithm
+
+    def run(self):
+        start_time = time.time()
+        """
+            Compute laplacian edges
+        """
+        laplacian_images = [] # Table for processed laplacians
+        for image_path in self.files:
+            success = self.Algorithm.compute_laplacian_image(image_path, self.gaussian_blur_size, self.laplacian_kernel_size)
+
+            if not success or self.is_killed: # Operation failed or stopped from UI
+                break
+
+            laplacian_images.append(image_path) # Append aligned image
+            # Send progress back to UI
+            self.finishedImage.emit(image_path)
+        
+        operation_success = False
+        if collections.Counter(laplacian_images) == collections.Counter(self.files): # All laplacian images computed?
+            # Laplacian edges computation finished successfully, start stacking
+            self.finished_laplacian.emit(True)
+            """
+                Start stacking operation using previously computed laplacian images
+            """
+            row_counter = 0
+            for current_row in self.Algorithm.stack_images(self.files):
+                if not current_row or self.is_killed: # Operation failed or stopped from UI
+                    break
+                row_counter += 1
+                self.row_update.emit(current_row)
+            
+            if row_counter == self.Algorithm.get_image_shape()[0]: # have all rows been processed?
+                operation_success = True
+
+        else:
+            # Failed to compute laplacians
+            self.finished_laplacian.emit(False)
+
+        # Operation ended
+        self.finished.emit({
+            "execution_time": round(time.time() - start_time, 4), 
+            "operation_success": operation_success,
             "killed_by_user": self.is_killed
             }
         )
@@ -92,8 +157,8 @@ class AlignImages(qtc.QThread):
 class MainWindow(qtw.QMainWindow):
     loaded_image_files = []
 
-    def __init__(self, *args, **kwargs):
-        super(MainWindow, self).__init__(*args, **kwargs)
+    def __init__(self):
+        super().__init__()
 
         loadUi("QtUi/main.ui", self)
         # Top bar setup
@@ -102,7 +167,9 @@ class MainWindow(qtw.QMainWindow):
         self.save_project_action.triggered.connect(self.save_project)
         self.export_output_action.triggered.connect(self.export_output)
         # Processing
-        self.align_images_action.triggered.connect(self.align_images)
+        self.align_images_action.triggered.connect(lambda: self.images_loaded_check([self.align_images]))
+        self.stack_images_action.triggered.connect(lambda: self.images_loaded_check([self.stack_images]))
+        self.align_and_stack_images_action.triggered.connect(lambda: self.images_loaded_check([self.align_images, self.stack_images])) # First align, then stack
 
         self.showMaximized() # Show main window in full screen
 
@@ -130,7 +197,7 @@ class MainWindow(qtw.QMainWindow):
         total_size = round(total_size, 2)
 
         # load images and prompt loading screen
-        image_progress = qtw.QProgressDialog("Loading... ", "Cancel loading", 0, len(self.loaded_image_files), self)
+        image_progress = qtw.QProgressDialog("Loading... ", "Cancel", 0, len(self.loaded_image_files), self)
         image_progress.setWindowTitle("Loading " + str(len(self.loaded_image_files)) + " images..., Total size: " + str(total_size) + " MB")
         image_progress.setLabelText("Preparing to load your images. This shouldn't take long. Please wait.")
         image_progress.setValue(0)
@@ -149,29 +216,34 @@ class MainWindow(qtw.QMainWindow):
         loading = LoadImages(self.loaded_image_files, self.Algorithm)
         loading.finishedImage.connect(update_progress)  # Update progress callback
 
-        """
-            Create pop-up on operation finish.
-        """
-        props = {}
-        props["progress_bar"] = image_progress
-        # Success message
-        props["success_message"] = qtw.QMessageBox(self)
-        props["success_message"].setIcon(qtw.QMessageBox.Information)
-        props["success_message"].setWindowTitle("Images loaded successfully!")
-        props["success_message"].setText(str(len(self.loaded_image_files)) + " images have been loaded.")
-        props["success_message"].setStandardButtons(qtw.QMessageBox.Ok)
-        # Error message
-        props["error_message"] = qtw.QMessageBox(self)
-        props["error_message"].setIcon(qtw.QMessageBox.Critical)
-        props["error_message"].setWindowTitle("Loading of images failed!")
-        props["error_message"].setText("Something went wrong while loading your images. Please retry.")
-        # User killed operation message
-        props["user_killed_message"] = qtw.QMessageBox(self)
-        props["user_killed_message"].setIcon(qtw.QMessageBox.Information)
-        props["user_killed_message"].setWindowTitle("Operation canceled by user.")
-        props["user_killed_message"].setText("Image loading has successfully been canceled by user.")
+        def finished_loading(returned):
+            self.loaded_image_files = returned["image_table"]   # Set loaded images
 
-        loading.finished.connect(lambda returned: self.result_message(returned, props))        # Create message
+            """
+            Create pop-up on operation finish.
+            """
+            props = {}
+            props["progress_bar"] = image_progress
+            # Success message
+            props["success_message"] = qtw.QMessageBox(self)
+            props["success_message"].setIcon(qtw.QMessageBox.Information)
+            props["success_message"].setWindowTitle("Images loaded successfully!")
+            props["success_message"].setText(str(len(self.loaded_image_files)) + " images have been loaded.")
+            props["success_message"].setStandardButtons(qtw.QMessageBox.Ok)
+            # Error message
+            props["error_message"] = qtw.QMessageBox(self)
+            props["error_message"].setIcon(qtw.QMessageBox.Critical)
+            props["error_message"].setWindowTitle("Loading of images failed!")
+            props["error_message"].setText("Something went wrong while loading your images. Please retry.")
+            # User killed operation message
+            props["user_killed_message"] = qtw.QMessageBox(self)
+            props["user_killed_message"].setIcon(qtw.QMessageBox.Information)
+            props["user_killed_message"].setWindowTitle("Operation canceled by user.")
+            props["user_killed_message"].setText("Image loading has successfully been canceled by user. Images that were loaded are still available.")
+
+            self.result_message(returned, props)                # Display message about operation
+        
+        loading.finished.connect(finished_loading)              # Connection on finished
 
         image_progress.canceled.connect(loading.kill)   # Stop image loading on cancel
         loading.start()
@@ -184,31 +256,46 @@ class MainWindow(qtw.QMainWindow):
     def export_output(self):
         print("Exporting output image")
 
+    # Only run functions if files are loaded
+    def images_loaded_check(self, func_table):
+        if self.loaded_image_files and len(self.loaded_image_files) > 0: # Check if images have been loaded
+            # Run functions
+            for func in func_table:
+                func()
+
+        else: # Display message telling user to load images
+            error_message = qtw.QMessageBox(self)
+            error_message.setIcon(qtw.QMessageBox.Critical)
+            error_message.setWindowTitle("No images are loaded!")
+            error_message.setText("No images have been loaded. Please load them in from the 'file' menu.")
+            error_message.exec_()
+
     def align_images(self):
-        if self.loaded_image_files and len(self.loaded_image_files) > 0: # Check if images are loaded
-            # Progress bar
-            qtw.QProgressDialog()
-            align_progress = qtw.QProgressDialog("", "Cancel aligning", 0, len(self.loaded_image_files), self)
-            align_progress.setWindowModality(qtc.Qt.WindowModal)
-            align_progress.setValue(0)
-            align_progress.setWindowTitle("Aligning " + str(len(self.loaded_image_files)) + " images.")
-            align_progress.setLabelText("Preparing to align your images. This shouldn't take long. Please wait.")
+        # Progress bar
+        qtw.QProgressDialog()
+        align_progress = qtw.QProgressDialog("", "Cancel", 0, len(self.loaded_image_files), self)
+        align_progress.setWindowModality(qtc.Qt.WindowModal)
+        align_progress.setValue(0)
+        align_progress.setWindowTitle("Aligning " + str(len(self.loaded_image_files)) + " images.")
+        align_progress.setLabelText("Preparing to align your images. This shouldn't take long. Please wait.")
 
-            counter = 0
-            def update_progress(l):
-                nonlocal counter
-                image0 = l[0]
-                image1 = l[1]
-                # update label text
-                align_progress.setLabelText("Just aligned: " + self.Utilities.get_file_name(image1) + " to: " + self.Utilities.get_file_name(image0))
-                counter += 1
+        counter = 0
+        def update_progress(l):
+            nonlocal counter
+            image0 = l[0]
+            image1 = l[1]
+            # update label text
+            align_progress.setLabelText("Just aligned: " + self.Utilities.get_file_name(image1) + " to: " + self.Utilities.get_file_name(image0))
+            counter += 1
 
-                # Update progress slider
-                align_progress.setValue(counter)
+            # Update progress slider
+            align_progress.setValue(counter)
 
 
-            aligning = AlignImages(self.loaded_image_files, self.Algorithm)
-            aligning.finishedImage.connect(update_progress)
+        aligning = AlignImages(self.loaded_image_files, self.Algorithm)
+        aligning.finishedImage.connect(update_progress)
+
+        def finished_loading(returned):
             """
                 Create pop-up on operation finish.
             """
@@ -231,17 +318,17 @@ class MainWindow(qtw.QMainWindow):
             props["user_killed_message"].setWindowTitle("Operation canceled by user.")
             props["user_killed_message"].setText("Image alignment has successfully been canceled by user.")
 
-            aligning.finished.connect(lambda returned: self.result_message(returned, props))
-            align_progress.canceled.connect(aligning.kill) # Kill operation on "cancel" press
-            aligning.start()
-            align_progress.exec_()
+            self.result_message(returned, props)
 
-        else: # Display message telling to load images
-            error_message = qtw.QMessageBox(self)
-            error_message.setIcon(qtw.QMessageBox.Critical)
-            error_message.setWindowTitle("No images are loaded!")
-            error_message.setText("No images have been loaded. Please load them in from the 'file' menu.")
-            error_message.exec_()
+        aligning.finished.connect(finished_loading)
+        align_progress.canceled.connect(aligning.kill) # Kill operation on "cancel" press
+
+        aligning.start()
+        align_progress.exec_()
+
+    def stack_images(self):
+        print("Stacking images")
+
 
 
     # Display result message after operation finished
@@ -261,8 +348,7 @@ class MainWindow(qtw.QMainWindow):
 
         # Are all loaded images inside of returned table?
         success = collections.Counter(image_table) == collections.Counter(self.loaded_image_files)
-
-        if success: # Display success message
+        if success and not killed_by_user: # Display success message
             # Get names of files
             file_names = []
             for image_path in self.loaded_image_files:
