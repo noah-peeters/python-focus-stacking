@@ -130,23 +130,23 @@ color: rgb(255, 255, 255);</string>
    </property>
    <widget class="QMenu" name="file_menu">
     <property name="title">
-     <string>file</string>
+     <string>File</string>
     </property>
     <addaction name="load_images_action"/>
     <addaction name="save_project_action"/>
     <addaction name="export_output_action"/>
     <addaction name="quit_action"/>
    </widget>
-   <widget class="QMenu" name="process_images_menu">
+   <widget class="QMenu" name="processing_menu">
     <property name="title">
-     <string>process images</string>
+     <string>Processing</string>
     </property>
     <addaction name="align_images_action"/>
     <addaction name="stack_images_action"/>
     <addaction name="align_and_stack_images_action"/>
    </widget>
    <addaction name="file_menu"/>
-   <addaction name="process_images_menu"/>
+   <addaction name="processing_menu"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="load_images_action">
