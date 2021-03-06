@@ -160,7 +160,9 @@ class MainWindow(qtw.QMainWindow):
         super().__init__()
 
         loadUi("QtUi/main.ui", self)
-        # Top bar setup
+        """
+            Top bar setup
+        """
         # File
         self.load_images_action.triggered.connect(self.load_images)
         self.save_project_action.triggered.connect(self.save_project)
@@ -169,6 +171,11 @@ class MainWindow(qtw.QMainWindow):
         self.align_images_action.triggered.connect(lambda: self.images_loaded_check([self.align_images]))
         self.stack_images_action.triggered.connect(lambda: self.images_loaded_check([self.stack_images]))
         self.align_and_stack_images_action.triggered.connect(lambda: self.images_loaded_check([self.align_images, self.stack_images])) # First align, then stack
+
+        """
+            Image list display
+        """
+        self.image_list_display = qtw.QListView()
 
         self.showMaximized() # Show main window in full screen
 
