@@ -1,0 +1,11 @@
+# Main UI
+pip==21.0.1
+PyQt5==5.15.2
+Path==15.1.2
+
+# Algorithm
+numpy==1.20.1
+opencv-python==4.5.1.48
+
+# Utilities
+DateTime==4.3

@@ -7,7 +7,6 @@ import sys
 from pathlib import Path
 import time
 import collections
-import dask
 
 SUPPORTED_IMAGE_FORMATS = "(*.png *.jpg)"
 
