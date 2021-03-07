@@ -249,7 +249,7 @@ class MainWindow(qtw.QMainWindow):
 
     def clear_loaded_images(self):
         # Display confirmation dialog
-        reply = qtw.QMessageBox.question(self, "Clear loaded images", "Are you sure you want to clear all loaded images?", qtw.QMessageBox.Yes|qtw.QMessageBox.No)
+        reply = qtw.QMessageBox.question(self, "Clear all loaded images?", "Are you sure you want to clear <b>all</b> loaded images?", qtw.QMessageBox.Yes|qtw.QMessageBox.No)
         if reply == qtw.QMessageBox.Yes:
             # Clear (user confirmed)
             self.loaded_image_files = []
@@ -315,18 +315,21 @@ class MainWindow(qtw.QMainWindow):
 # Main layout for MainWindow (splitter window)
 class MainLayout(qtw.QWidget):
     image_names = []
+    image_scale_factor = 1
+    scale_step = 0.1
+    image_scale_factor_range = [1, 5]
     def __init__(self, parent):        
         super().__init__(parent)
 
         self.list_widget = LoadedImagesWidget(self)
-        self.image_widget = ImageWidget(self)
+        self.scroll_image_widget = ImageScroll(self)
 
         self.list_widget.image_list.itemClicked.connect(self.update_image)
 
         splitter = qtw.QSplitter()
         splitter.setChildrenCollapsible(False)
         splitter.addWidget(self.list_widget)
-        splitter.addWidget(self.image_widget)
+        splitter.addWidget(self.scroll_image_widget)
         screen_width = qtw.QDesktopWidget().availableGeometry(0).width()
         splitter.setSizes([round(screen_width / 5), screen_width])
         
@@ -358,8 +361,48 @@ class MainLayout(qtw.QWidget):
 
         image = self.image_paths[index]
         if image:
-            self.image_widget.image.setPixmap(qtg.QPixmap(image))
+            # Set image
+            im = qtg.QPixmap(image)
+            self.scroll_image_widget.image.setPixmap(im.scaled(self.scroll_image_widget.size(), qtc.Qt.KeepAspectRatio, qtc.Qt.SmoothTransformation))
+            self.scroll_image_widget.image.adjustSize()
 
+    
+    # Scale image (larger or smaller)
+    def wheelEvent(self, event):
+        if event.modifiers() == qtc.Qt.ControlModifier: # Ctrl must be pressed together with scroll for scaling
+            num_pixels = event.pixelDelta().y()
+            num_degrees = event.angleDelta().y()
+            if num_pixels:                          # prefer scrolling with pixels
+                self.scale_image(num_pixels, event)
+            else:                                   # Scroll with num_degrees
+                self.scale_image(num_degrees, event)
+
+        
+    def scale_image(self, number, event):
+        if not self.scroll_image_widget.image.pixmap():  # Image not (yet) displayed
+            return
+
+        relative_scale = 1
+        # Update current scale factor
+        if number > 0:  # Zoom in one step
+            self.image_scale_factor += self.scale_step
+            relative_scale = 1 + self.scale_step
+        else:           # Zoom out one step
+            self.image_scale_factor -= self.scale_step
+            relative_scale = 1 - self.scale_step
+
+        # Check boundaries / constraint value
+        if self.image_scale_factor < self.image_scale_factor_range[0]:
+            self.image_scale_factor = self.image_scale_factor_range[0]
+        elif self.image_scale_factor > self.image_scale_factor_range[1]:
+            self.image_scale_factor = self.image_scale_factor_range[1]
+        
+        self.scroll_image_widget.image.resize(self.image_scale_factor * self.scroll_image_widget.image.pixmap().size()) # Resize image
+        # Adjust scrollbars
+        horizontal = self.scroll_image_widget.horizontalScrollBar()
+        horizontal.setValue(round(relative_scale * horizontal.value() + ((relative_scale - 1) * horizontal.pageStep() / 2)))
+        vertical = self.scroll_image_widget.verticalScrollBar()
+        vertical.setValue(round(relative_scale * vertical.value() + ((relative_scale - 1) * vertical.pageStep() / 2)))
 
 # Loaded images list
 class LoadedImagesWidget(qtw.QWidget):
@@ -378,17 +421,23 @@ class LoadedImagesWidget(qtw.QWidget):
 
 
 # Image preview 
-class ImageWidget(qtw.QWidget):
+class ImageScroll(qtw.QScrollArea):
     def __init__(self, parent):
         super().__init__(parent)
+
         self.image = qtw.QLabel("Please select an image to preview.", self)
         self.image.setFont(qtg.QFont("Times", 14))
-        self.image.setSizePolicy(qtw.QSizePolicy.Expanding, qtw.QSizePolicy.Expanding)
+        self.image.setSizePolicy(qtw.QSizePolicy.Ignored, qtw.QSizePolicy.Ignored)
         self.image.setAlignment(qtc.Qt.AlignCenter)
+        self.image.setScaledContents(True)
 
-        layout = qtw.QHBoxLayout()
-        layout.addWidget(self.image)
-        self.setLayout(layout)
+        self.setAlignment(qtc.Qt.AlignCenter)
+        self.setWidget(self.image)
+        self.setVisible(True)
+    
+    def wheelEvent(self, event):
+        if event.type() == qtc.QEvent.Wheel and event.modifiers() != qtc.Qt.ControlModifier:
+            event.ignore()  # Ignore normal scroll
 
 # preferences class
 class Preferences(qtw.QDialog):
@@ -396,10 +445,11 @@ class Preferences(qtw.QDialog):
         super().__init__(parent)
 
         self.Application = parent
-
         self.setWindowTitle("Preferences")
         self.setWindowModality(qtc.Qt.ApplicationModal)
+
         self.theme_setting = qtw.QComboBox()
+        self.theme_setting.insertItems(0, ["Dark theme", "Light theme"])
 
         apply_button = qtw.QPushButton()
         apply_button.setText("Apply")
@@ -410,26 +460,33 @@ class Preferences(qtw.QDialog):
         layout.addWidget(apply_button, 1, 1)
         self.setLayout(layout)
 
-        # Setup settings
+        # Load saved settings
         self.settings = qtc.QSettings("PyStacker", "Preferences")
+        #self.settings.remove("Preferences")
         self.load_settings()
+
+    # Load saved settings
+    def load_settings(self):
+        # Load saved theme
+        applied_theme = self.settings.value("Theme", "Dark theme")
+        self.set_color_theme(applied_theme)
+
+        index = self.theme_setting.findText(applied_theme)
+        if index != -1:   # -1 is not found
+            self.theme_setting.setCurrentIndex(index)
 
     # Apply all settings
     def apply_settings(self):
         # Set theme
         applied_theme = self.theme_setting.currentText()
         self.set_color_theme(applied_theme)
-        ls = []
-        if applied_theme == "Dark theme":
-            ls = ["Dark theme", "Light theme"]
-        else:
-            ls = ["Light theme", "Dark theme"]
-        
-        self.settings.setValue("Theme", ls)
+        self.settings.setValue("Theme", applied_theme)
 
-        self.theme_setting.clear()
-        self.theme_setting.insertItems(0, ls)
+        index = self.theme_setting.findText(applied_theme)
+        if index != -1:   # -1 is not found
+            self.theme_setting.setCurrentIndex(index)
     
+    # Set a color theme
     def set_color_theme(self, theme_name):
         palette = qtg.QPalette()
         if theme_name == "Dark theme":
@@ -459,19 +516,6 @@ class Preferences(qtw.QDialog):
             self.Application.setPalette(palette)
         elif theme_name == "Light theme":
             self.Application.setPalette(self.Application.style().standardPalette())
-
-    # Load saved settings
-    def load_settings(self):
-        # Load saved theme
-        theme = self.settings.value("Theme", ["Dark theme", "Light theme"])[0]
-        self.set_color_theme(theme)
-        ls = []
-        if theme == "Dark theme":
-            ls = ["Dark theme", "Light theme"]
-        else:
-            ls = ["Light theme", "Dark theme"]
-        self.theme_setting.clear()
-        self.theme_setting.insertItems(0, ls)
 
 if __name__ == "__main__":
     app = qtw.QApplication(sys.argv)
