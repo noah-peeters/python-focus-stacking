@@ -11,6 +11,8 @@ stacked_memmap_filename = "stacked.rgb"
 class MainAlgorithm:
     def __init__(self):
         self.image_shape = []
+        self.rgb_images = []
+        self.laplacian_images = []
 
     # Load a single image
     def load_image(self, image_path):
@@ -109,13 +111,11 @@ class MainAlgorithm:
 
     def stack_images(self):
         output = np.zeros(shape=self.rgb_images[0].shape, dtype=self.rgb_images[0].dtype)
-
-        for y in range(0, self.rgb_images[0].shape[0]):             # Loop through vertical pixels (columns)
-            for x in range(0, self.rgb_images[0].shape[1]):         # Loop through horizontal pixels (rows)
+        for y in range(0, self.rgb_images[0].shape[0]):             # Loop through vertical pixels (rows)
+            for x in range(0, self.rgb_images[0].shape[1]):         # Loop through horizontal pixels (columns)
                 yxlaps = abs(self.laplacian_images[:, y, x])        # Absolute value of laplacian at this pixel
                 index = (np.where(yxlaps == max(yxlaps)))[0][0]
                 output[y, x] = self.rgb_images[index][y, x]         # Write focus pixel to output image
-
             yield y # Send progress back to UI
         
         # Delete unused memmaps

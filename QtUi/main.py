@@ -51,6 +51,117 @@ class LoadImages(qtc.QThread):
     def kill(self):
         self.is_killed = True
 
+class AlignImages(qtc.QThread):
+    finishedImage = qtc.pyqtSignal(list)
+    finished = qtc.pyqtSignal(dict)
+
+    def __init__(self, files, algorithm):
+        super().__init__()
+
+        self.files = files
+        self.is_killed = False
+
+        # Initialize algorithm
+        self.Algorithm = algorithm
+
+    def run(self):
+        start_time = time.time()
+        image0 = self.files[round(len(self.files)/2)] # Get middle image
+        aligned_images = [] # Table for processed images (to check if all have been loaded)
+        for image_path in self.files:
+            image0, image1, success = self.Algorithm.align_image(image0, image_path)
+
+            if not success or self.is_killed: # Operation failed or stopped from UI
+                break
+
+            aligned_images.append(image_path) # Append aligned image
+            # Send progress back to UI
+            self.finishedImage.emit([image0, image1])
+
+        # Operation ended
+        self.finished.emit({
+            "execution_time": round(time.time() - start_time, 4), 
+            "image_table": aligned_images, 
+            "killed_by_user": self.is_killed
+            }
+        )
+    
+    def kill(self):
+        self.is_killed = True
+
+class StackImages(qtc.QThread):
+    laplacianImageProgress = qtc.pyqtSignal(str)
+    finishedLaplacian = qtc.pyqtSignal(bool)
+    finishedImageStackRow = qtc.pyqtSignal(int)
+    finished = qtc.pyqtSignal(dict)
+
+    def __init__(self, files, gaussian_blur_size, laplacian_kernel_size, algorithm):
+        super().__init__()
+
+        self.start_time = 0
+        self.stacking_success = False
+        self.is_killed = False
+
+        self.files = files
+        self.gaussian_blur_size = gaussian_blur_size
+        self.laplacian_kernel_size = laplacian_kernel_size
+
+        # Initialize algorithm
+        self.Algorithm = algorithm
+
+         # Operation ended
+        self.finished.emit({
+            "execution_time": round(time.time() - self.start_time, 4),
+            "operation_success": self.stacking_success,
+            "killed_by_user": self.is_killed
+            }
+        )
+
+    def run(self):
+        self.start_time = time.time()
+        """
+            Compute laplacian edges
+        """
+        laplacian_images = [] # Table for processed laplacians
+        for image_path in self.files:
+            success = self.Algorithm.compute_laplacian_image(image_path, self.gaussian_blur_size, self.laplacian_kernel_size)
+
+            if not success or self.is_killed: # Operation failed or stopped from UI
+                break
+
+            laplacian_images.append(image_path) # Append aligned image
+            # Send progress back to UI
+            self.laplacianImageProgress.emit(image_path)
+        
+        if collections.Counter(laplacian_images) == collections.Counter(self.files): # All laplacian images computed?
+            # Laplacian edges computation success
+            self.finishedLaplacian.emit(True)
+        else:
+            # Laplacian edges computation failed
+            self.finishedLaplacian.emit(False)
+    
+    # Kill operation
+    def kill(self):
+        self.is_killed = True
+    
+    # Do final stacking
+    def do_final_stacking(self):
+        # Load images
+        self.Algorithm.load_stack_images(self.files)
+        """
+            Start stacking operation using previously computed laplacian images
+        """
+        row_counter = 0
+        for current_row in self.Algorithm.stack_images():
+            if type(current_row) != int or self.is_killed:   # Operation failed or stopped from UI
+                break
+
+            row_counter += 1
+            self.finishedImageStackRow.emit(row_counter)
+        
+        if row_counter == self.Algorithm.get_image_shape()[0]: # have all rows been processed?
+            self.stacking_success = True
+
 class MainWindow(qtw.QMainWindow):
     current_directory = None
     def __init__(self):
@@ -68,6 +179,9 @@ class MainWindow(qtw.QMainWindow):
         from algorithm import MainAlgorithm
         self.Algorithm = MainAlgorithm()        # Init algorithm
 
+        from utilities import Utilities
+        self.Utilities = Utilities()            # Init utilities
+
     # Setup file menu (topbar)
     def setup_file_menu(self):
         # Get built-in icon from name (shorthand)
@@ -82,8 +196,10 @@ class MainWindow(qtw.QMainWindow):
         # Menus
         file_menu = menu_bar.addMenu("&File")
         processing_menu = menu_bar.addMenu("&Processing")
-        help_menu = menu_bar.addMenu("&Help")
+        view_menu = menu_bar.addMenu("&View")
+        image_preview_menu = view_menu.addMenu("&Image preview")
         edit_menu = menu_bar.addMenu("&Edit")
+        help_menu = menu_bar.addMenu("&Help")
 
         # Create actions
         new_action = qtw.QAction("&New file", self, shortcut="Ctrl+N", triggered=self.create_new_file)
@@ -93,15 +209,18 @@ class MainWindow(qtw.QMainWindow):
         clear_loaded_images_action = qtw.QAction("&Clear loaded images", self, shortcut="Ctrl+Alt+C", triggered=self.clear_loaded_images)
         export_action = qtw.QAction("&Export", self, shortcut="Ctrl+E", triggered=self.export_image)
         quit_action = qtw.QAction("&Quit", self, shortcut="Ctrl+W", triggered=lambda: self.close())
-        # Processing functions disabled by default (no images loaded)
-        self.align_images_action = qtw.QAction("&Align images", self, shortcut="Ctrl+Shift+A", triggered=self.align_images, enabled=False)
+
+        self.align_images_action = qtw.QAction("&Align images", self, shortcut="Ctrl+Shift+A", triggered=self.align_images, enabled=False)  # Disabled by default
         self.stack_images_action = qtw.QAction("&Stack Images", self, shortcut="Ctrl+Shift+S", triggered=self.stack_images, enabled=False)
         self.align_and_stack_images_action = qtw.QAction("&Align and stack images", self, shortcut="Ctrl+Shift+P", triggered=self.align_and_stack_images, enabled=False)
 
-        about_app_action = qtw.QAction("&About PyStacker", self, triggered=self.about_application)
-        about_qt_action = qtw.QAction("&About Qt", self, triggered=qtw.qApp.aboutQt)
+        self.image_preview_zoom_in = qtw.QAction("Zoom &in", self, enabled=False)
+        self.image_preview_zoom_out = qtw.QAction("Zoom &out", self, enabled=False)
 
         preferences_action = qtw.QAction("&Preferences", self, shortcut="Ctrl+P", triggered=self.open_preferences)
+
+        about_app_action = qtw.QAction("&About PyStacker", self, triggered=self.about_application)
+        about_qt_action = qtw.QAction("&About Qt", self, triggered=qtw.qApp.aboutQt)
 
         # Setup help tips for actions
         new_action.setStatusTip("Create a new file. Unsaved progress will be lost!")
@@ -116,10 +235,13 @@ class MainWindow(qtw.QMainWindow):
         self.stack_images_action.setStatusTip("Focus stack images.")
         self.align_and_stack_images_action.setStatusTip("Align images and focus stack them.")
 
-        about_app_action.setStatusTip("About this application.")
-        about_qt_action.setStatusTip("About Qt, the framework that was used to design this ui.")
+        self.image_preview_zoom_in.setStatusTip("Zoom one increment in on the preview image.")
+        self.image_preview_zoom_out.setStatusTip("Zoom one increment out on the preview image.")
 
         preferences_action.setStatusTip("Preferences: themes and other settings.")
+
+        about_app_action.setStatusTip("About this application.")
+        about_qt_action.setStatusTip("About Qt, the framework that was used to design this ui.")
 
         # Icons for actions
         new_action.setIcon(get_icon("SP_FileIcon"))
@@ -149,10 +271,13 @@ class MainWindow(qtw.QMainWindow):
         processing_menu.addAction(self.stack_images_action)
         processing_menu.addAction(self.align_and_stack_images_action)
 
-        help_menu.addAction(about_app_action)
-        help_menu.addAction(about_qt_action)
+        image_preview_menu.addAction(self.image_preview_zoom_in)
+        image_preview_menu.addAction(self.image_preview_zoom_out)
 
         edit_menu.addAction(preferences_action)
+
+        help_menu.addAction(about_app_action)
+        help_menu.addAction(about_qt_action)
 
     def create_new_file(self):
         print("Create new file")
@@ -174,10 +299,10 @@ class MainWindow(qtw.QMainWindow):
         self.loaded_image_files, _ = qtw.QFileDialog.getOpenFileNames(self, 'Select images to load.', dir, "Image files " + SUPPORTED_IMAGE_FORMATS)
 
         if not self.loaded_image_files or len(self.loaded_image_files) <= 0:    # No images have been selected!
-            self.toggle_processing_actions(False)   # Disable processing actions
+            self.toggle_actions("processing", False)    # Disable processing actions
             return
         
-        self.toggle_processing_actions(True)                # Enable processing actions
+        self.toggle_actions("processing", True)             # Enable processing actions
         self.current_directory = self.loaded_image_files[0] # Set current directory
 
         # Get total size of all images to import
@@ -189,11 +314,9 @@ class MainWindow(qtw.QMainWindow):
         total_size = round(total_size, 2)
 
         # load images and prompt loading screen
-        image_progress = qtw.QProgressDialog("Loading... ", "Cancel", 0, len(self.loaded_image_files), self)
+        image_progress = self.create_progress_bar()
         image_progress.setWindowTitle("Loading " + str(len(self.loaded_image_files)) + " images..., Total size: " + str(total_size) + " MB")
         image_progress.setLabelText("Preparing to load your images. This shouldn't take long. Please wait.")
-        image_progress.setValue(0)
-        image_progress.setWindowModality(qtc.Qt.WindowModal)
 
         counter = 0
         def update_progress(image_path):
@@ -234,15 +357,109 @@ class MainWindow(qtw.QMainWindow):
         loading.start()
 
         image_progress.exec_()
+    
+    def align_images(self):
+        # Progress bar
+        align_progress = self.create_progress_bar()
+        align_progress.setWindowTitle("Aligning " + str(len(self.loaded_image_files)) + " images.")
+        align_progress.setLabelText("Preparing to align your images. This shouldn't take long. Please wait.")
+
+        counter = 0
+        def update_progress(l):
+            nonlocal counter
+            image0 = l[0]
+            image1 = l[1]
+            # update label text
+            align_progress.setLabelText("Just aligned: " + self.Utilities.get_file_name(image1) + " to: " + self.Utilities.get_file_name(image0))
+            counter += 1
+
+            # Update progress slider
+            align_progress.setValue(counter)
+
+
+        aligning = AlignImages(self.loaded_image_files, self.Algorithm)
+        aligning.finishedImage.connect(update_progress)
+
+        def finished_loading(returned):
+            """
+                Create pop-up on operation finish.
+            """
+            props = {}
+            props["progress_bar"] = align_progress
+            # Success message
+            props["success_message"] = qtw.QMessageBox(self)
+            props["success_message"].setIcon(qtw.QMessageBox.Information)
+            props["success_message"].setWindowTitle("Images aligned successfully!")
+            props["success_message"].setText(str(len(self.loaded_image_files)) + " images have been aligned.")
+            props["success_message"].setStandardButtons(qtw.QMessageBox.Ok)
+
+            self.result_message(returned, props)
+
+        aligning.finished.connect(finished_loading)
+        align_progress.canceled.connect(aligning.kill) # Kill operation on "cancel" press
+
+        aligning.start()
+        align_progress.exec_()
+
+    def stack_images(self):
+        # Laplacians progress bar
+        laplacian_progress = self.create_progress_bar()
+        laplacian_progress.setWindowTitle("Calculating laplacians of " + str(len(self.loaded_image_files)) + " images.")
+        laplacian_progress.setLabelText("Preparing to calculate laplacian gradients of your images. This shouldn't take long. Please wait.")
+
+        stacking = StackImages(self.loaded_image_files, 5, 5, self.Algorithm)
+        """
+            Functions for progress bars
+        """
+        counter = 0
+        def laplacian_image_progress(image_path):
+            nonlocal counter
+            laplacian_progress.setLabelText("Just computed laplacian gradient for: " + image_path)
+            counter += 1
+            laplacian_progress.setValue(counter)
+
+        def laplacian_finished(success_bool):
+            if success_bool:
+                # Display success message
+                reply = qtw.QMessageBox.question(self, "Successfully calculated laplacian gradients.", 
+                "Laplacian gradients were successfully calculated. Do you want to proceed and stack all images?", 
+                qtw.QMessageBox.Yes|qtw.QMessageBox.No)
+                if reply == qtw.QMessageBox.Yes:
+                    stacking.do_final_stacking()    # Continue stacking
+
+                    # Final stacking progress bar
+                    stack_progress = qtw.QProgressDialog("Loading... ", "Cancel", 0, self.Algorithm.get_image_shape()[0], self)
+                    stack_progress.setWindowModality(qtc.Qt.WindowModal)
+                    stack_progress.setValue(0)
+                    stack_progress.setWindowTitle("Final stacking of " + str(len(self.loaded_image_files)) + " images.")
+                    stack_progress.setLabelText("Preparing to calulate the final focus stack of your images. This shouldn't take long. Please wait.")
+                    stack_progress.exec_()  # Start loading screen
+
+                    def image_row_finished(current_row):
+                        stack_progress.setLabelText("Just calculated row number " + str(current_row) + " of the stacked image.")
+                        stack_progress.setValue(current_row)
+
+                    stacking.finishedImageStackRow.connect(image_row_finished)
+                    stack_progress.canceled.connect(stacking.kill)
+            else:
+                # Display error message
+                qtw.QMessageBox.critical(self, "An error occured", 
+                "An error occurred during the calculation of laplacian gradients. Please retry."
+                )
+            laplacian_progress.close()
+
+        # Connections
+        stacking.laplacianImageProgress.connect(laplacian_image_progress)
+        stacking.finishedLaplacian.connect(laplacian_finished)
+        # Connect cancel buttons
+        laplacian_progress.canceled.connect(stacking.kill)
+
+        stacking.start()
+        laplacian_progress.exec_()
+
 
     def export_image(self):
         print("Export image")
-    
-    def align_images(self):
-        print("Align images")
-
-    def stack_images(self):
-        print("Stack images")
 
     def align_and_stack_images(self):
         print("Align and stack images")
@@ -254,7 +471,7 @@ class MainWindow(qtw.QMainWindow):
             # Clear (user confirmed)
             self.loaded_image_files = []
             self.main_layout.set_image_list(self.loaded_image_files)
-            self.toggle_processing_actions(False)
+            self.toggle_actions("processing", False)
 
 
     # Display result message after operation finished
@@ -296,6 +513,14 @@ class MainWindow(qtw.QMainWindow):
             user_killed_message.setText("Operation successfully canceled by user.")
             user_killed_message.exec_()
 
+    # Progress bar shorthand
+    def create_progress_bar(self):
+        progress = None
+        progress = qtw.QProgressDialog("Loading...", "Cancel", 0, len(self.loaded_image_files), self)
+        progress.setWindowModality(qtc.Qt.WindowModal)
+        progress.setValue(0)
+        return progress
+
     def about_application(self):
         qtw.QMessageBox.about(self, "About PyStacker",
         "<b>PyStacker</b> is an application written in <b>Python</b> and <b>Qt</b> that is completely open-source: "
@@ -304,10 +529,14 @@ class MainWindow(qtw.QMainWindow):
         )
 
     # Enable or disable processing actions (only enable when images are loaded)
-    def toggle_processing_actions(self, bool):
-        self.align_images_action.setEnabled(bool)
-        self.stack_images_action.setEnabled(bool)
-        self.align_and_stack_images_action.setEnabled(bool)
+    def toggle_actions(self, menu_name, bool):
+        if menu_name == "processing":
+            self.align_images_action.setEnabled(bool)
+            self.stack_images_action.setEnabled(bool)
+            self.align_and_stack_images_action.setEnabled(bool)
+        elif menu_name == "image_preview":
+            self.image_preview_zoom_in.setEnabled(bool)
+            self.image_preview_zoom_out.setEnabled(bool)
 
     def open_preferences(self):
         self.Preferences.exec_()
@@ -318,12 +547,19 @@ class MainLayout(qtw.QWidget):
     image_scale_factor = 1
     scale_step = 0.1
     image_scale_factor_range = [1, 5]
+
     def __init__(self, parent):        
         super().__init__(parent)
-
         self.list_widget = LoadedImagesWidget(self)
         self.scroll_image_widget = ImageScroll(self)
+        self.parent_status_bar = parent.statusBar()
+        self.toggle_actions = parent.toggle_actions
 
+        # Zoom menu connections
+        parent.image_preview_zoom_in.triggered.connect(lambda: self.scale_image(2))     # Zoom in
+        parent.image_preview_zoom_out.triggered.connect(lambda: self.scale_image(-1))   # Zoom out
+
+        # List widget image clicked, show preview
         self.list_widget.image_list.itemClicked.connect(self.update_image)
 
         splitter = qtw.QSplitter()
@@ -341,7 +577,7 @@ class MainLayout(qtw.QWidget):
     def set_image_list(self, image_paths):
         self.list_widget.image_list.clear()
         self.image_paths = image_paths
-
+        
         # Get names from paths
         self.image_names = []
         for path in image_paths:
@@ -352,6 +588,7 @@ class MainLayout(qtw.QWidget):
         else:
             self.list_widget.image_list.addItems(self.list_widget.default_list) # Add default
 
+    # Update image preview
     def update_image(self, item):
         # Try getting image index
         try:
@@ -366,6 +603,9 @@ class MainLayout(qtw.QWidget):
             self.scroll_image_widget.image.setPixmap(im.scaled(self.scroll_image_widget.size(), qtc.Qt.KeepAspectRatio, qtc.Qt.SmoothTransformation))
             self.scroll_image_widget.image.adjustSize()
 
+            self.image_scale_factor = 1 # reset scale factor
+
+            self.toggle_actions("image_preview", True) # Enable Image preview menu
     
     # Scale image (larger or smaller)
     def wheelEvent(self, event):
@@ -373,12 +613,12 @@ class MainLayout(qtw.QWidget):
             num_pixels = event.pixelDelta().y()
             num_degrees = event.angleDelta().y()
             if num_pixels:                          # prefer scrolling with pixels
-                self.scale_image(num_pixels, event)
+                self.scale_image(num_pixels)
             else:                                   # Scroll with num_degrees
-                self.scale_image(num_degrees, event)
+                self.scale_image(num_degrees)
 
-        
-    def scale_image(self, number, event):
+    # Scale image
+    def scale_image(self, number):
         if not self.scroll_image_widget.image.pixmap():  # Image not (yet) displayed
             return
 
@@ -403,6 +643,9 @@ class MainLayout(qtw.QWidget):
         horizontal.setValue(round(relative_scale * horizontal.value() + ((relative_scale - 1) * horizontal.pageStep() / 2)))
         vertical = self.scroll_image_widget.verticalScrollBar()
         vertical.setValue(round(relative_scale * vertical.value() + ((relative_scale - 1) * vertical.pageStep() / 2)))
+
+        # Display status message with current scale
+        self.parent_status_bar.showMessage("Current scale: " + str(round(self.image_scale_factor, 2)))
 
 # Loaded images list
 class LoadedImagesWidget(qtw.QWidget):
