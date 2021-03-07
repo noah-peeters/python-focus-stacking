@@ -11,8 +11,7 @@ stacked_memmap_filename = "stacked.rgb"
 class MainAlgorithm:
     def __init__(self):
         self.image_shape = []
-        self.rgb_images = []
-        self.laplacian_images = []
+        self.final_stack_row_increment = 75
 
     # Load a single image
     def load_image(self, image_path):
@@ -96,31 +95,39 @@ class MainAlgorithm:
 
         return True
 
-    def load_stack_images(self, image_paths):
-        images = []
-        laplacians = []
+    def stack_images(self, image_paths):
+        """
+            Load rgb images and laplacian gradients
+        """
+        rgb_images = []
+        laplacian_images = []
         for im_path in image_paths:
             global SHAPE
-            images.append(np.memmap(im_path + rgb_memmap_extension, mode="r", shape=self.image_shape))
-            laplacians.append(np.memmap(im_path + laplacian_memmap_extension, mode="r", shape=(self.image_shape[0], self.image_shape[1]), dtype="float64"))
+            rgb_images.append(np.memmap(im_path + rgb_memmap_extension, mode="r", shape=self.image_shape))
+            laplacian_images.append(np.memmap(im_path + laplacian_memmap_extension, mode="r", shape=(self.image_shape[0], self.image_shape[1]), dtype="float64"))
 
-        laplacians = np.asarray(laplacians)
-
-        self.rgb_images = images
-        self.laplacian_images = laplacians
-
-    def stack_images(self):
-        output = np.zeros(shape=self.rgb_images[0].shape, dtype=self.rgb_images[0].dtype)
-        for y in range(0, self.rgb_images[0].shape[0]):             # Loop through vertical pixels (rows)
-            for x in range(0, self.rgb_images[0].shape[1]):         # Loop through horizontal pixels (columns)
-                yxlaps = abs(self.laplacian_images[:, y, x])        # Absolute value of laplacian at this pixel
+        laplacian_images = np.asarray(laplacian_images)
+        """
+            Calculate output image
+        """
+        output = np.zeros(shape=rgb_images[0].shape, dtype=rgb_images[0].dtype)
+        counter = 0
+        for y in range(0, rgb_images[0].shape[0]):             # Loop through vertical pixels (rows)
+            counter += 1
+            for x in range(0, rgb_images[0].shape[1]):         # Loop through horizontal pixels (columns)
+                yxlaps = abs(laplacian_images[:, y, x])        # Absolute value of laplacian at this pixel
                 index = (np.where(yxlaps == max(yxlaps)))[0][0]
-                output[y, x] = self.rgb_images[index][y, x]         # Write focus pixel to output image
-            yield y # Send progress back to UI
+                output[y, x] = rgb_images[index][y, x]         # Write focus pixel to output image
+            
+            if counter >= self.final_stack_row_increment:
+                counter = 0
+                yield y # Send progress back to UI (every increment rows)
+
+        yield rgb_images[0].shape[0] # Finished
         
         # Delete unused memmaps
-        del self.rgb_images
-        del self.laplacian_images
+        del rgb_images
+        del laplacian_images
 
         # Write stacked image to memmap
         stacked_memmap = np.memmap(stacked_memmap_filename, mode="w+", shape=self.image_shape)

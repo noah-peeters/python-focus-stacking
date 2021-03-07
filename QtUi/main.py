@@ -89,17 +89,15 @@ class AlignImages(qtc.QThread):
     def kill(self):
         self.is_killed = True
 
-class StackImages(qtc.QThread):
-    laplacianImageProgress = qtc.pyqtSignal(str)
-    finishedLaplacian = qtc.pyqtSignal(bool)
-    finishedImageStackRow = qtc.pyqtSignal(int)
+class CalculateLaplacians(qtc.QThread):
+    image_finished = qtc.pyqtSignal(str)
     finished = qtc.pyqtSignal(dict)
 
     def __init__(self, files, gaussian_blur_size, laplacian_kernel_size, algorithm):
         super().__init__()
 
         self.start_time = 0
-        self.stacking_success = False
+        self.laplacian_success = False
         self.is_killed = False
 
         self.files = files
@@ -108,14 +106,6 @@ class StackImages(qtc.QThread):
 
         # Initialize algorithm
         self.Algorithm = algorithm
-
-         # Operation ended
-        self.finished.emit({
-            "execution_time": round(time.time() - self.start_time, 4),
-            "operation_success": self.stacking_success,
-            "killed_by_user": self.is_killed
-            }
-        )
 
     def run(self):
         self.start_time = time.time()
@@ -131,36 +121,61 @@ class StackImages(qtc.QThread):
 
             laplacian_images.append(image_path) # Append aligned image
             # Send progress back to UI
-            self.laplacianImageProgress.emit(image_path)
+            self.image_finished.emit(image_path)
         
         if collections.Counter(laplacian_images) == collections.Counter(self.files): # All laplacian images computed?
-            # Laplacian edges computation success
-            self.finishedLaplacian.emit(True)
-        else:
-            # Laplacian edges computation failed
-            self.finishedLaplacian.emit(False)
+            self.laplacian_success = True   # Laplacian edges computation success
+        
+        # Operation ended
+        self.finished.emit({
+            "execution_time": round(time.time() - self.start_time, 4),
+            "operation_success": self.laplacian_success,
+            "killed_by_user": self.is_killed
+            }
+        )
     
     # Kill operation
     def kill(self):
         self.is_killed = True
-    
-    # Do final stacking
-    def do_final_stacking(self):
-        # Load images
-        self.Algorithm.load_stack_images(self.files)
+
+class FinalStacking(qtc.QThread):
+    row_finished = qtc.pyqtSignal(int)
+    finished = qtc.pyqtSignal(dict)
+    def __init__(self, files, algoritm):
+        super().__init__()
+        self.files = files
+        self.Algorithm = algoritm
+        self.is_killed = False
+        self.stack_success = False
+        self.start_time = 0
+
+    def run(self):
         """
             Start stacking operation using previously computed laplacian images
         """
-        row_counter = 0
-        for current_row in self.Algorithm.stack_images():
+        self.start_time = time.time()
+        row_reference = 0
+        for current_row in self.Algorithm.stack_images(self.files):
             if type(current_row) != int or self.is_killed:   # Operation failed or stopped from UI
                 break
 
-            row_counter += 1
-            self.finishedImageStackRow.emit(row_counter)
+            self.row_finished.emit(current_row)
+            row_reference = current_row
         
-        if row_counter == self.Algorithm.get_image_shape()[0]: # have all rows been processed?
-            self.stacking_success = True
+        if row_reference == self.Algorithm.get_image_shape()[0]: # have all rows been processed?
+            self.stack_success = True
+
+        # Operation ended
+        self.finished.emit({
+            "execution_time": round(time.time() - self.start_time, 4),
+            "operation_success": self.stack_success,
+            "killed_by_user": self.is_killed
+            }
+        )
+    
+    def kill(self):
+        self.is_killed = True
+
 
 class MainWindow(qtw.QMainWindow):
     current_directory = None
@@ -308,7 +323,7 @@ class MainWindow(qtw.QMainWindow):
         # Get total size of all images to import
         total_size = 0
         for image_path in self.loaded_image_files:
-            file_size = Utilities.get_file_size_MB(image_path)
+            file_size = self.Utilities.get_file_size_MB(image_path)
             if file_size:
                 total_size += file_size
         total_size = round(total_size, 2)
@@ -323,7 +338,7 @@ class MainWindow(qtw.QMainWindow):
             nonlocal counter
             counter += 1
             # update label text
-            image_progress.setLabelText("Just loaded: " + Utilities.get_file_name(image_path))
+            image_progress.setLabelText("Just loaded: " + self.Utilities.get_file_name(image_path))
 
             # Update progress slider
             image_progress.setValue(counter)
@@ -407,56 +422,65 @@ class MainWindow(qtw.QMainWindow):
         laplacian_progress.setWindowTitle("Calculating laplacians of " + str(len(self.loaded_image_files)) + " images.")
         laplacian_progress.setLabelText("Preparing to calculate laplacian gradients of your images. This shouldn't take long. Please wait.")
 
-        stacking = StackImages(self.loaded_image_files, 5, 5, self.Algorithm)
-        """
-            Functions for progress bars
-        """
+        laplacian_calc = CalculateLaplacians(self.loaded_image_files, 5, 5, self.Algorithm)
+
         counter = 0
-        def laplacian_image_progress(image_path):
+        def laplacian_progress_update(image_path):
             nonlocal counter
-            laplacian_progress.setLabelText("Just computed laplacian gradient for: " + image_path)
+            laplacian_progress.setLabelText("Just computed laplacian gradient for: " + self.Utilities.get_file_name(image_path))
             counter += 1
             laplacian_progress.setValue(counter)
 
-        def laplacian_finished(success_bool):
-            if success_bool:
-                # Display success message
-                reply = qtw.QMessageBox.question(self, "Successfully calculated laplacian gradients.", 
-                "Laplacian gradients were successfully calculated. Do you want to proceed and stack all images?", 
-                qtw.QMessageBox.Yes|qtw.QMessageBox.No)
-                if reply == qtw.QMessageBox.Yes:
-                    stacking.do_final_stacking()    # Continue stacking
+        def laplacian_finished(returned):
+            props = {}
+            props["progress_bar"] = laplacian_progress
+            # Success message
+            props["success_message"] = qtw.QMessageBox(self)
+            props["success_message"].setIcon(qtw.QMessageBox.Information)
+            props["success_message"].setWindowTitle("Laplacian gradients calculation success!")
+            props["success_message"].setText("Laplacian gradients have been calculated for " + str(len(self.loaded_image_files)) + " images.")
+            props["success_message"].setStandardButtons(qtw.QMessageBox.Ok)
+            self.result_message(returned, props)        # Display message about operation
 
-                    # Final stacking progress bar
-                    stack_progress = qtw.QProgressDialog("Loading... ", "Cancel", 0, self.Algorithm.get_image_shape()[0], self)
-                    stack_progress.setWindowModality(qtc.Qt.WindowModal)
-                    stack_progress.setValue(0)
-                    stack_progress.setWindowTitle("Final stacking of " + str(len(self.loaded_image_files)) + " images.")
-                    stack_progress.setLabelText("Preparing to calulate the final focus stack of your images. This shouldn't take long. Please wait.")
-                    stack_progress.exec_()  # Start loading screen
+            """
+                Start final stacking process
+            """
+            # Progress bar setup
+            stack_progress = qtw.QProgressDialog("Loading... ", "Cancel", 0, self.Algorithm.get_image_shape()[0], self)
+            stack_progress.setWindowModality(qtc.Qt.WindowModal)
+            stack_progress.setValue(0)
+            stack_progress.setWindowTitle("Final stacking of image: " + str(self.Algorithm.get_image_shape()[0]) + " rows tall, " + str(self.Algorithm.get_image_shape()[1]) + " columns wide.")
+            stack_progress.setLabelText("Preparing to calculate the final focus stack of your images. This shouldn't take long. Please wait.")
 
-                    def image_row_finished(current_row):
-                        stack_progress.setLabelText("Just calculated row number " + str(current_row) + " of the stacked image.")
-                        stack_progress.setValue(current_row)
+            final_stacking = FinalStacking(self.loaded_image_files, self.Algorithm)
 
-                    stacking.finishedImageStackRow.connect(image_row_finished)
-                    stack_progress.canceled.connect(stacking.kill)
-            else:
-                # Display error message
-                qtw.QMessageBox.critical(self, "An error occured", 
-                "An error occurred during the calculation of laplacian gradients. Please retry."
-                )
-            laplacian_progress.close()
+            def row_progress_update(current_row):
+                stack_progress.setLabelText("Just calculated row " + str(current_row) + " of " + str(self.Algorithm.get_image_shape()[0]) + ".")
+                stack_progress.setValue(current_row)
 
-        # Connections
-        stacking.laplacianImageProgress.connect(laplacian_image_progress)
-        stacking.finishedLaplacian.connect(laplacian_finished)
-        # Connect cancel buttons
-        laplacian_progress.canceled.connect(stacking.kill)
+            def stack_finished(returned):
+                props = {}
+                props["progress_bar"] = stack_progress
+                # Success message
+                props["success_message"] = qtw.QMessageBox(self)
+                props["success_message"].setIcon(qtw.QMessageBox.Information)
+                props["success_message"].setWindowTitle("Final stack calculation success!")
+                props["success_message"].setText("The final stack has successfully been calculated.")
+                props["success_message"].setStandardButtons(qtw.QMessageBox.Ok)
+                self.result_message(returned, props)
 
-        stacking.start()
+            final_stacking.row_finished.connect(row_progress_update)
+            final_stacking.finished.connect(stack_finished)
+
+            final_stacking.start()
+            stack_progress.exec_()
+
+        laplacian_calc.image_finished.connect(laplacian_progress_update)
+        laplacian_calc.finished.connect(laplacian_finished)
+        laplacian_progress.canceled.connect(laplacian_calc.kill)
+
+        laplacian_calc.start()
         laplacian_progress.exec_()
-
 
     def export_image(self):
         print("Export image")
@@ -478,7 +502,13 @@ class MainWindow(qtw.QMainWindow):
     def result_message(self, returned_table, props):
         # "Unpack" values
         execution_time = returned_table["execution_time"]
-        image_table = returned_table["image_table"]
+        image_table = None
+        if "image_table" in returned_table:
+            image_table = returned_table["image_table"]
+
+        operation_success = None
+        if "operation_success" in returned_table:
+            operation_success = returned_table["operation_success"]
         killed_by_user = returned_table["killed_by_user"]
 
         progress_bar = props["progress_bar"]
@@ -487,8 +517,14 @@ class MainWindow(qtw.QMainWindow):
         if progress_bar:
             progress_bar.close() # Hide progress bar
 
-        # Are all loaded images inside of returned table?
-        success = collections.Counter(image_table) == collections.Counter(self.loaded_image_files)
+        # Get operation success
+        success = None
+        if image_table:
+            # Are all loaded images inside of returned table?
+            success = collections.Counter(image_table) == collections.Counter(self.loaded_image_files)
+        elif operation_success:
+            success = operation_success
+
         if success and not killed_by_user: # Display success message
             # Get names of files
             file_names = []
