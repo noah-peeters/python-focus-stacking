@@ -9,7 +9,7 @@ import PyQt5.QtGui as qtg
 from utilities import Utilities
 Utilities = Utilities()
 
-SUPPORTED_IMAGE_FORMATS = "(*.png *.jpg)"
+SUPPORTED_IMAGE_FORMATS = "(*.jpg *.png)"
 
 class LoadImages(qtc.QThread):
     finishedImage = qtc.pyqtSignal(str)
@@ -222,7 +222,7 @@ class MainWindow(qtw.QMainWindow):
         save_file = qtw.QAction("&Save file", self, shortcut="Ctrl+S", triggered=self.save_file)
         load_images_action = qtw.QAction("&Load images", self, shortcut="Ctrl+L", triggered=self.load_images)
         clear_loaded_images_action = qtw.QAction("&Clear loaded images", self, shortcut="Ctrl+Alt+C", triggered=self.clear_loaded_images)
-        export_action = qtw.QAction("&Export", self, shortcut="Ctrl+E", triggered=self.export_image)
+        export_action = qtw.QAction("&Export image", self, shortcut="Ctrl+E", triggered=self.export_image)
         quit_action = qtw.QAction("&Quit", self, shortcut="Ctrl+W", triggered=lambda: self.close())
 
         self.align_images_action = qtw.QAction("&Align images", self, shortcut="Ctrl+Shift+A", triggered=self.align_images, enabled=False)  # Disabled by default
@@ -484,6 +484,21 @@ class MainWindow(qtw.QMainWindow):
 
     def export_image(self):
         print("Export image")
+        dir = None
+        if self.current_directory:
+            dir = self.current_directory
+        else:
+            dir = str(Path.home)
+        file_path, _ = qtw.QFileDialog.getSaveFileName(self, "Export stacked image", dir, SUPPORTED_IMAGE_FORMATS)
+
+        if file_path:
+            self.current_directory = file_path
+            # Export to path
+            self.Algorithm.export_image(file_path)
+
+            # Display success message
+            qtw.QMessageBox.information(self, "Exported image successfully!", "Output image was successfully exported.", qtw.QMessageBox.Ok)
+        
 
     def align_and_stack_images(self):
         print("Align and stack images")

@@ -133,6 +133,12 @@ class MainAlgorithm:
         stacked_memmap = np.memmap(stacked_memmap_filename, mode="w+", shape=self.image_shape)
         stacked_memmap[:] = output
 
+    # Export image to path
+    def export_image(self, path):
+        output = np.memmap(stacked_memmap_filename, mode="r", shape=self.image_shape)
+        rgb = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
+        cv2.imwrite(path, rgb)
+        del output
 
     def get_image_shape(self):
         return self.image_shape
