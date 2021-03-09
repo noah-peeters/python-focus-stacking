@@ -163,3 +163,9 @@ class MainAlgorithm:
         self.aligned_images_temp_files = {}
         self.laplacian_images_temp_files = {}
         self.stacked_image_temp_file = None
+    
+    def getImageFromPath(self, path, im_type):
+        if im_type == "rgb":
+            image = self.rgb_images_temp_files[path]
+            if image:
+                return np.memmap(image, mode="r", shape=self.image_shape)

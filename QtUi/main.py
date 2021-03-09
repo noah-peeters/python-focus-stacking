@@ -2,9 +2,11 @@ import sys
 import collections
 from pathlib import Path
 import time
+import os
 import PyQt5.QtWidgets as qtw
 import PyQt5.QtCore as qtc
 import PyQt5.QtGui as qtg
+import numpy as np
 
 from utilities import Utilities
 Utilities = Utilities()
@@ -181,6 +183,18 @@ class MainWindow(qtw.QMainWindow):
     current_directory = None
     def __init__(self):
         super().__init__()
+        """
+            Imports
+        """
+        from algorithm import MainAlgorithm
+        self.Algorithm = MainAlgorithm()        # Init algorithm
+
+        from utilities import Utilities
+        self.Utilities = Utilities()            # Init utilities
+
+        """
+            Self setup
+        """
         self.setWindowTitle("PyStacker")
         self.setStatusBar(qtw.QStatusBar())     # Create status bar
         self.setup_file_menu()                  # Setup file menu (top bar)
@@ -190,12 +204,6 @@ class MainWindow(qtw.QMainWindow):
         self.showMaximized()                    # Show fullscreen
 
         self.Preferences = Preferences(self)    # Init Preferences
-
-        from algorithm import MainAlgorithm
-        self.Algorithm = MainAlgorithm()        # Init algorithm
-
-        from utilities import Utilities
-        self.Utilities = Utilities()            # Init utilities
 
     # Setup file menu (topbar)
     def setup_file_menu(self):
@@ -313,6 +321,10 @@ class MainWindow(qtw.QMainWindow):
         if not self.loaded_image_files or len(self.loaded_image_files) <= 0:    # No images have been selected!
             self.toggle_actions("processing", False)    # Disable processing actions
             return
+        
+        # Set absolute paths
+        for val in self.loaded_image_files:
+            val = os.path.abspath(val)
         
         self.toggle_actions("processing", True)             # Enable processing actions
         self.current_directory = self.loaded_image_files[0] # Set current directory
@@ -488,6 +500,8 @@ class MainWindow(qtw.QMainWindow):
         file_path, _ = qtw.QFileDialog.getSaveFileName(self, "Export stacked image", dir, SUPPORTED_IMAGE_FORMATS)
 
         if file_path:
+            file_path = os.path.abspath(file_path)
+            
             self.current_directory = file_path
             # Export to path
             success = self.Algorithm.export_image(file_path)
@@ -602,6 +616,8 @@ class MainLayout(qtw.QWidget):
 
     def __init__(self, parent):        
         super().__init__(parent)
+        self.Algorithm = parent.Algorithm
+
         self.list_widget = ImageListWidget(self)
         self.image_preview = ImageViewer(self)
 
@@ -609,7 +625,7 @@ class MainLayout(qtw.QWidget):
         self.toggle_actions = parent.toggle_actions
 
         # List widget image clicked, show preview
-        self.list_widget.loaded_images_list.itemClicked.connect(self.setImage)
+        self.list_widget.loaded_images_list.itemClicked.connect(self.setLoadedImage)
 
         splitter = qtw.QSplitter()
         splitter.setChildrenCollapsible(False)
@@ -629,28 +645,30 @@ class MainLayout(qtw.QWidget):
     def set_image_list(self, image_paths):
         self.list_widget.loaded_images_list.clear()
         self.image_paths = image_paths
-        
-        # Get names from paths
-        self.image_names = []
-        for path in image_paths:
-            self.image_names.append(Utilities.get_file_name(path))
 
-        if len(self.image_names) > 0:
-            self.list_widget.loaded_images_list.addItems(self.image_names) # Add image names
+        if len(self.image_paths) > 0:
+            # Images loaded, display their names.
+            # Get names from paths
+            self.image_names = []
+            for path in image_paths:
+                item = qtw.QListWidgetItem()                        # Filename on label
+                item.setText(Utilities.get_file_name(path))         # Display name only
+                item.setData(qtc.Qt.UserRole, path)                 # Add full path to data
+                self.list_widget.loaded_images_list.addItem(item)   # Add item to list
         else:
-            self.list_widget.loaded_images_list.addItems(self.list_widget.loaded_images_default) # Add default
+            self.list_widget.loaded_images_list.addItems(self.list_widget.loaded_images_default) # Add default info texts
     
     # Update image of QGraphicsView
-    def setImage(self, item):
-        try:
-            index = self.image_names.index(item.text())     # Try getting image index
-        except ValueError:
-            return
+    def setLoadedImage(self, item):
+        image = self.Algorithm.getImageFromPath(item.data(qtc.Qt.UserRole), "rgb")
+        if image.any():
+            # Convert image from numpy array to QPixmap
+            height, width, _ = image.shape
+            bytes_per_line = 3 * width
+            qImage = qtg.QImage(image.data, width, height, bytes_per_line, qtg.QImage.Format_RGB888)
 
-        image = self.image_paths[index]
-        if image:
-            self.image_preview.setImage(qtg.QPixmap(image)) # Set image inside QGraphicsView
-            self.toggle_actions("image_preview", True)      # Enable Image preview menu
+            self.image_preview.setImage(qtg.QPixmap(qImage))    # Set image inside QGraphicsView
+            self.toggle_actions("image_preview", True)          # Enable Image preview menu
     
     # Set zoom reset on new image load of ImageViewer
     def setZoomReset(self, value):
@@ -659,7 +677,10 @@ class MainLayout(qtw.QWidget):
 # Loaded images list
 class ImageListWidget(qtw.QWidget):
     loaded_images_default = ["Loaded images will appear here.", "Please load them in from the 'file' menu."]
-    processed_images_default = ["Processed images will appear here.", "Please load images first,", "and process them using the 'processing' menu."]
+    aligned_images_list_default = ["Aligned images will appear here.", "Please load your images first,", "and align them from the 'processing' menu."]
+    laplacian_images_list_default = ["Laplacian gradients (edge detection),", "of your images will appear here.", "Please load images first,", "and calulate their edges from the 'processing' menu."]
+    stacked_image_list_default = ["The final stacked image will appear here.", "Please stack your images from the 'processing' menu."]
+    
     def __init__(self, parent):
         super().__init__(parent)
 
@@ -669,18 +690,38 @@ class ImageListWidget(qtw.QWidget):
         self.loaded_images_list.setSelectionMode(qtw.QAbstractItemView.ExtendedSelection)
         self.loaded_images_list.addItems(self.loaded_images_default)
 
-        # Processed images list
-        self.processed_images_list = qtw.QListWidget()
-        self.processed_images_list.setAlternatingRowColors(True)
-        self.processed_images_list.setSelectionMode(qtw.QAbstractItemView.ExtendedSelection)
-        self.processed_images_list.addItems(self.processed_images_default)
+        """
+            Processed images lists
+        """
+        # Aligned images
+        self.aligned_images_list = qtw.QListWidget()
+        self.aligned_images_list.setAlternatingRowColors(True)
+        self.aligned_images_list.setSelectionMode(qtw.QAbstractItemView.ExtendedSelection)
+        self.aligned_images_list.addItems(self.aligned_images_list_default)
+        # Laplacian images
+        self.laplacian_images_list = qtw.QListWidget()
+        self.laplacian_images_list.setAlternatingRowColors(True)
+        self.laplacian_images_list.setSelectionMode(qtw.QAbstractItemView.ExtendedSelection)
+        self.laplacian_images_list.addItems(self.laplacian_images_list_default)
+        # Stacked image
+        self.stacked_image_list = qtw.QListWidget()
+        self.stacked_image_list.setAlternatingRowColors(True)
+        self.stacked_image_list.setSelectionMode(qtw.QAbstractItemView.ExtendedSelection)
+        self.stacked_image_list.addItems(self.stacked_image_list_default)
+        """
+            Tab widget (For sorting processing output images)
+        """
+        self.processing_lists_tab = qtw.QTabWidget()
+        self.processing_lists_tab.addTab(self.aligned_images_list, "Aligned images")
+        self.processing_lists_tab.addTab(self.laplacian_images_list, "Laplacian images")
+        self.processing_lists_tab.addTab(self.stacked_image_list, "Stacked image")
 
         # Vertical splitter in between lists
         splitter = qtw.QSplitter()
         splitter.setChildrenCollapsible(False)
         splitter.setOrientation(qtc.Qt.Vertical)
         splitter.addWidget(self.loaded_images_list)
-        splitter.addWidget(self.processed_images_list)
+        splitter.addWidget(self.processing_lists_tab)
         screen_width = qtw.QDesktopWidget().availableGeometry(0).height()
         splitter.setSizes([screen_width, round(screen_width / 2)])
 
