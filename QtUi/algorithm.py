@@ -11,6 +11,7 @@ class MainAlgorithm:
         # Dictionaries for storing temporary matrices (loaded/processed images)
         self.rgb_images_temp_files = {}
         self.grayscale_images_temp_files = {}
+        self.aligned_images_temp_files = {}
         self.laplacian_images_temp_files = {}
         self.stacked_image_temp_file = None
 
@@ -154,3 +155,11 @@ class MainAlgorithm:
 
     def get_image_shape(self):
         return self.image_shape
+    
+    # Clear all temp files
+    def clearTempFiles(self):
+        self.rgb_images_temp_files = {}
+        self.grayscale_images_temp_files = {}
+        self.aligned_images_temp_files = {}
+        self.laplacian_images_temp_files = {}
+        self.stacked_image_temp_file = None

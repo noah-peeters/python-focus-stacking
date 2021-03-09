@@ -513,6 +513,8 @@ class MainWindow(qtw.QMainWindow):
             self.toggle_actions("processing", False)                    # Toggle image processing actions off (no images loaded)
             self.main_layout.image_preview.setImage(None)               # Remove image from preview
 
+            self.Algorithm.clearTempFiles() # Clear all temp files
+
     # Display result message after operation finished
     def result_message(self, returned_table, props):
         # "Unpack" values
