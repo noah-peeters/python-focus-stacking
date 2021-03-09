@@ -229,8 +229,7 @@ class MainWindow(qtw.QMainWindow):
         self.stack_images_action = qtw.QAction("&Stack Images", self, shortcut="Ctrl+Shift+S", triggered=self.stack_images, enabled=False)
         self.align_and_stack_images_action = qtw.QAction("&Align and stack images", self, shortcut="Ctrl+Shift+P", triggered=self.align_and_stack_images, enabled=False)
 
-        self.image_preview_zoom_in = qtw.QAction("Zoom &in", self, enabled=False)
-        self.image_preview_zoom_out = qtw.QAction("Zoom &out", self, enabled=False)
+        self.image_preview_reset_zoom = qtw.QAction("&Reset zoom on preview", self, enabled=False, checkable=True, checked=True)
 
         preferences_action = qtw.QAction("&Preferences", self, shortcut="Ctrl+P", triggered=self.open_preferences)
 
@@ -250,8 +249,7 @@ class MainWindow(qtw.QMainWindow):
         self.stack_images_action.setStatusTip("Focus stack images.")
         self.align_and_stack_images_action.setStatusTip("Align images and focus stack them.")
 
-        self.image_preview_zoom_in.setStatusTip("Zoom one increment in on the preview image.")
-        self.image_preview_zoom_out.setStatusTip("Zoom one increment out on the preview image.")
+        self.image_preview_reset_zoom.setStatusTip("Reset zoom on new image select.")
 
         preferences_action.setStatusTip("Preferences: themes and other settings.")
 
@@ -286,8 +284,7 @@ class MainWindow(qtw.QMainWindow):
         processing_menu.addAction(self.stack_images_action)
         processing_menu.addAction(self.align_and_stack_images_action)
 
-        image_preview_menu.addAction(self.image_preview_zoom_in)
-        image_preview_menu.addAction(self.image_preview_zoom_out)
+        image_preview_menu.addAction(self.image_preview_reset_zoom)
 
         edit_menu.addAction(preferences_action)
 
@@ -493,11 +490,14 @@ class MainWindow(qtw.QMainWindow):
         if file_path:
             self.current_directory = file_path
             # Export to path
-            self.Algorithm.export_image(file_path)
-
-            # Display success message
-            qtw.QMessageBox.information(self, "Exported image successfully!", "Output image was successfully exported.", qtw.QMessageBox.Ok)
-        
+            success = self.Algorithm.export_image(file_path)
+            
+            if success == True:
+                # Display success message
+                qtw.QMessageBox.information(self, "Exported image successfully!", "Output image was successfully exported.", qtw.QMessageBox.Ok)
+            else:
+                # Display error message
+                qtw.QMessageBox.critical(self, "Image export failed!", "Failed to export output image. Have you completed the stacking process?", qtw.QMessageBox.Ok)
 
     def align_and_stack_images(self):
         self.align_images()
@@ -509,9 +509,9 @@ class MainWindow(qtw.QMainWindow):
         if reply == qtw.QMessageBox.Yes:
             # Clear (user confirmed)
             self.loaded_image_files = []
-            self.main_layout.set_image_list(self.loaded_image_files)
-            self.toggle_actions("processing", False)
-
+            self.main_layout.set_image_list(self.loaded_image_files)    # Clear image list
+            self.toggle_actions("processing", False)                    # Toggle image processing actions off (no images loaded)
+            self.main_layout.image_preview.setImage(None)               # Remove image from preview
 
     # Display result message after operation finished
     def result_message(self, returned_table, props):
@@ -586,8 +586,7 @@ class MainWindow(qtw.QMainWindow):
             self.stack_images_action.setEnabled(bool)
             self.align_and_stack_images_action.setEnabled(bool)
         elif menu_name == "image_preview":
-            self.image_preview_zoom_in.setEnabled(bool)
-            self.image_preview_zoom_out.setEnabled(bool)
+            self.image_preview_reset_zoom.setEnabled(bool)
 
     def open_preferences(self):
         self.Preferences.exec_()
@@ -596,37 +595,37 @@ class MainWindow(qtw.QMainWindow):
 class MainLayout(qtw.QWidget):
     image_names = []
     image_scale_factor = 1
-    scale_step = 0.1
+    scale_step = 0.25
     image_scale_factor_range = [1, 5]
 
     def __init__(self, parent):        
         super().__init__(parent)
-        self.list_widget = LoadedImagesWidget(self)
-        self.scroll_image_widget = ImageScroll(self)
+        self.list_widget = ImageListWidget(self)
+        self.image_preview = ImageViewer(self)
+
         self.parent_status_bar = parent.statusBar()
         self.toggle_actions = parent.toggle_actions
 
-        # Zoom menu connections
-        parent.image_preview_zoom_in.triggered.connect(lambda: self.scale_image(2))     # Zoom in
-        parent.image_preview_zoom_out.triggered.connect(lambda: self.scale_image(-1))   # Zoom out
-
         # List widget image clicked, show preview
-        self.list_widget.image_list.itemClicked.connect(self.update_image)
+        self.list_widget.loaded_images_list.itemClicked.connect(self.setImage)
 
         splitter = qtw.QSplitter()
         splitter.setChildrenCollapsible(False)
         splitter.addWidget(self.list_widget)
-        splitter.addWidget(self.scroll_image_widget)
+        splitter.addWidget(self.image_preview)
+
         screen_width = qtw.QDesktopWidget().availableGeometry(0).width()
         splitter.setSizes([round(screen_width / 5), screen_width])
         
         layout = qtw.QHBoxLayout(self)
         layout.addWidget(splitter)
         self.setLayout(layout)
+
+        parent.image_preview_reset_zoom.triggered.connect(self.setZoomReset) # Reset zoom on new image lad, file menu connection
     
     # Update list of loaded images
     def set_image_list(self, image_paths):
-        self.list_widget.image_list.clear()
+        self.list_widget.loaded_images_list.clear()
         self.image_paths = image_paths
         
         # Get names from paths
@@ -635,103 +634,137 @@ class MainLayout(qtw.QWidget):
             self.image_names.append(Utilities.get_file_name(path))
 
         if len(self.image_names) > 0:
-            self.list_widget.image_list.addItems(self.image_names)              # Add image names
+            self.list_widget.loaded_images_list.addItems(self.image_names) # Add image names
         else:
-            self.list_widget.image_list.addItems(self.list_widget.default_list) # Add default
-
-    # Update image preview
-    def update_image(self, item):
-        # Try getting image index
+            self.list_widget.loaded_images_list.addItems(self.list_widget.loaded_images_default) # Add default
+    
+    # Update image of QGraphicsView
+    def setImage(self, item):
         try:
-            index = self.image_names.index(item.text())
+            index = self.image_names.index(item.text())     # Try getting image index
         except ValueError:
             return
 
         image = self.image_paths[index]
         if image:
-            # Set image
-            im = qtg.QPixmap(image)
-            self.scroll_image_widget.image.setPixmap(im.scaled(self.scroll_image_widget.size(), qtc.Qt.KeepAspectRatio, qtc.Qt.SmoothTransformation))
-            self.scroll_image_widget.image.adjustSize()
-
-            self.image_scale_factor = 1 # reset scale factor
-
-            self.toggle_actions("image_preview", True) # Enable Image preview menu
+            self.image_preview.setImage(qtg.QPixmap(image)) # Set image inside QGraphicsView
+            self.toggle_actions("image_preview", True)      # Enable Image preview menu
     
-    # Scale image (larger or smaller)
-    def wheelEvent(self, event):
-        if event.modifiers() == qtc.Qt.ControlModifier: # Ctrl must be pressed together with scroll for scaling
-            num_pixels = event.pixelDelta().y()
-            num_degrees = event.angleDelta().y()
-            if num_pixels:                          # prefer scrolling with pixels
-                self.scale_image(num_pixels)
-            else:                                   # Scroll with num_degrees
-                self.scale_image(num_degrees)
-
-    # Scale image
-    def scale_image(self, number):
-        if not self.scroll_image_widget.image.pixmap():  # Image not (yet) displayed
-            return
-
-        relative_scale = 1
-        # Update current scale factor
-        if number > 0:  # Zoom in one step
-            self.image_scale_factor += self.scale_step
-            relative_scale = 1 + self.scale_step
-        else:           # Zoom out one step
-            self.image_scale_factor -= self.scale_step
-            relative_scale = 1 - self.scale_step
-
-        # Check boundaries / constraint value
-        if self.image_scale_factor < self.image_scale_factor_range[0]:
-            self.image_scale_factor = self.image_scale_factor_range[0]
-        elif self.image_scale_factor > self.image_scale_factor_range[1]:
-            self.image_scale_factor = self.image_scale_factor_range[1]
-        
-        self.scroll_image_widget.image.resize(self.image_scale_factor * self.scroll_image_widget.image.pixmap().size()) # Resize image
-        # Adjust scrollbars
-        horizontal = self.scroll_image_widget.horizontalScrollBar()
-        horizontal.setValue(round(relative_scale * horizontal.value() + ((relative_scale - 1) * horizontal.pageStep() / 2)))
-        vertical = self.scroll_image_widget.verticalScrollBar()
-        vertical.setValue(round(relative_scale * vertical.value() + ((relative_scale - 1) * vertical.pageStep() / 2)))
-
-        # Display status message with current scale
-        self.parent_status_bar.showMessage("Current scale: " + str(round(self.image_scale_factor, 2)))
+    # Set zoom reset on new image load of ImageViewer
+    def setZoomReset(self, value):
+        self.image_preview.reset_zoom = value
 
 # Loaded images list
-class LoadedImagesWidget(qtw.QWidget):
-    default_list = ["Loaded images will appear here.", "Please load them in from the 'file' menu."]
+class ImageListWidget(qtw.QWidget):
+    loaded_images_default = ["Loaded images will appear here.", "Please load them in from the 'file' menu."]
+    processed_images_default = ["Processed images will appear here.", "Please load images first,", "and process them using the 'processing' menu."]
     def __init__(self, parent):
         super().__init__(parent)
 
-        self.image_list = qtw.QListWidget()
-        self.image_list.setAlternatingRowColors(True)
-        self.image_list.setSelectionMode(qtw.QAbstractItemView.ExtendedSelection)
-        self.image_list.addItems(self.default_list)
+        # Loaded images list
+        self.loaded_images_list = qtw.QListWidget()
+        self.loaded_images_list.setAlternatingRowColors(True)
+        self.loaded_images_list.setSelectionMode(qtw.QAbstractItemView.ExtendedSelection)
+        self.loaded_images_list.addItems(self.loaded_images_default)
+
+        # Processed images list
+        self.processed_images_list = qtw.QListWidget()
+        self.processed_images_list.setAlternatingRowColors(True)
+        self.processed_images_list.setSelectionMode(qtw.QAbstractItemView.ExtendedSelection)
+        self.processed_images_list.addItems(self.processed_images_default)
+
+        # Vertical splitter in between lists
+        splitter = qtw.QSplitter()
+        splitter.setChildrenCollapsible(False)
+        splitter.setOrientation(qtc.Qt.Vertical)
+        splitter.addWidget(self.loaded_images_list)
+        splitter.addWidget(self.processed_images_list)
+        screen_width = qtw.QDesktopWidget().availableGeometry(0).height()
+        splitter.setSizes([screen_width, round(screen_width / 2)])
 
         layout = qtw.QVBoxLayout()
-        layout.addWidget(self.image_list)
+        layout.addWidget(splitter)
         self.setLayout(layout)
 
+class ImageViewer(qtw.QGraphicsView):
+    photoClicked = qtc.pyqtSignal(qtc.QPoint)
 
-# Image preview 
-class ImageScroll(qtw.QScrollArea):
     def __init__(self, parent):
         super().__init__(parent)
+        self.current_zoom_level = 0
+        self.reset_zoom = True
+        self.image_loaded = True
+        self._scene = qtw.QGraphicsScene(self)
+        self._photo = qtw.QGraphicsPixmapItem()
+        self._scene.addItem(self._photo)
 
-        self.image = qtw.QLabel("Please select an image to preview.", self)
-        self.image.setFont(qtg.QFont("Times", 14))
-        self.image.setSizePolicy(qtw.QSizePolicy.Ignored, qtw.QSizePolicy.Ignored)
-        self.image.setAlignment(qtc.Qt.AlignCenter)
-        self.image.setScaledContents(True)
+        self.setScene(self._scene)
+        self.setTransformationAnchor(qtw.QGraphicsView.AnchorUnderMouse)
+        self.setResizeAnchor(qtw.QGraphicsView.AnchorUnderMouse)
+        self.setVerticalScrollBarPolicy(qtc.Qt.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(qtc.Qt.ScrollBarAlwaysOff)
+        self.setBackgroundBrush(qtg.QBrush(qtg.QColor(30, 30, 30)))
+        self.setFrameShape(qtw.QFrame.NoFrame)
 
-        self.setAlignment(qtc.Qt.AlignCenter)
-        self.setWidget(self.image)
-        self.setVisible(True)
-    
+    def hasImage(self):
+        return not self.image_loaded
+
+    # Fit image to view
+    def fitInView(self, scale=True):
+        rect = qtc.QRectF(self._photo.pixmap().rect())
+        if not rect.isNull():
+            self.setSceneRect(rect)
+            if self.hasImage():
+                unity = self.transform().mapRect(qtc.QRectF(0, 0, 1, 1))
+                self.scale(1 / unity.width(), 1 / unity.height())
+                viewrect = self.viewport().rect()
+                scenerect = self.transform().mapRect(rect)
+                factor = min(viewrect.width() / scenerect.width(),
+                             viewrect.height() / scenerect.height())
+                self.scale(factor, factor)
+            self.current_zoom_level = 0
+
+    # Set image
+    def setImage(self, pixmap=None):
+        if pixmap and not pixmap.isNull():
+            self.image_loaded = False
+            self.setDragMode(qtw.QGraphicsView.ScrollHandDrag)
+            self._photo.setPixmap(pixmap)
+        else:
+            self.image_loaded = True
+            self.setDragMode(qtw.QGraphicsView.NoDrag)
+            self._photo.setPixmap(qtg.QPixmap())
+        
+        # Reset zoom
+        if self.reset_zoom == True:
+            self.current_zoom_level = 0
+            self.fitInView()
+
     def wheelEvent(self, event):
-        if event.type() == qtc.QEvent.Wheel and event.modifiers() != qtc.Qt.ControlModifier:
-            event.ignore()  # Ignore normal scroll
+        if self.hasImage():
+            if event.angleDelta().y() > 0:
+                factor = 1.25
+                self.current_zoom_level += 1
+            else:
+                factor = 0.8
+                self.current_zoom_level -= 1
+            if self.current_zoom_level > 0:
+                self.scale(factor, factor)
+            elif self.current_zoom_level == 0:
+                self.fitInView()
+            else:
+                self.current_zoom_level = 0
+
+    def toggleDragMode(self):
+        if self.dragMode() == qtw.QGraphicsView.ScrollHandDrag:
+            self.setDragMode(qtw.QGraphicsView.NoDrag)
+        elif not self._photo.pixmap().isNull():
+            self.setDragMode(qtw.QGraphicsView.ScrollHandDrag)
+
+    def mousePressEvent(self, event):
+        if self._photo.isUnderMouse():
+            self.photoClicked.emit(self.mapToScene(event.pos()).toPoint())
+        super().mousePressEvent(event)
 
 # preferences class
 class Preferences(qtw.QDialog):

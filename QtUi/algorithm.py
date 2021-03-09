@@ -1,17 +1,18 @@
 import numpy as np
 import cv2
+import tempfile
 import dask
-
-# Extensions for memmap files
-rgb_memmap_extension = ".rgb"
-grayscale_memmap_extension = ".grayscale"
-laplacian_memmap_extension = ".laplacian"
-stacked_memmap_filename = "stacked.rgb"
 
 class MainAlgorithm:
     def __init__(self):
         self.image_shape = []
         self.final_stack_row_increment = 75
+
+        # Dictionaries for storing temporary matrices (loaded/processed images)
+        self.rgb_images_temp_files = {}
+        self.grayscale_images_temp_files = {}
+        self.laplacian_images_temp_files = {}
+        self.stacked_image_temp_file = None
 
     # Load a single image
     def load_image(self, image_path):
@@ -21,23 +22,27 @@ class MainAlgorithm:
         image_grayscale = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
         self.image_shape = image_bgr.shape
 
-        # Write to disk (memmap)
-        memmapped_rgb = np.memmap(image_path + rgb_memmap_extension, mode="w+", shape=self.image_shape)
+        # Write to disk (memmap + tempfile)
+        temp_rgb_file = tempfile.NamedTemporaryFile()
+        memmapped_rgb = np.memmap(temp_rgb_file, mode="w+", shape=self.image_shape)
         memmapped_rgb[:] = image_rgb
-        del memmapped_rgb
+        self.rgb_images_temp_files[image_path] = temp_rgb_file  # Keep reference to temporary file
 
-        memmapped_grayscale = np.memmap(image_path + grayscale_memmap_extension, mode="w+", shape=(self.image_shape[0], self.image_shape[1]))
+        temp_grayscale_file = tempfile.NamedTemporaryFile()
+        memmapped_grayscale = np.memmap(temp_grayscale_file, mode="w+", shape=(self.image_shape[0], self.image_shape[1]))
         memmapped_grayscale[:] = image_grayscale
-        del memmapped_grayscale
+        self.grayscale_images_temp_files[image_path] = temp_grayscale_file
 
+        del memmapped_rgb
+        del memmapped_grayscale
         return True # Successfully loaded image to memmap
     
     # Align a single image
     def align_image(self, im1_path, im2_path):
         # Get memmap's
-        im1_gray = np.memmap(im1_path + grayscale_memmap_extension, mode="r", shape=(self.image_shape[0], self.image_shape[1]))
-        im2_gray = np.memmap(im2_path + grayscale_memmap_extension, mode="r", shape=(self.image_shape[0], self.image_shape[1]))
-        im2_rgb = np.memmap(im2_path + rgb_memmap_extension, mode="r+", shape=self.image_shape)
+        im1_gray = np.memmap(self.grayscale_images_temp_files[im1_path], mode="r", shape=(self.image_shape[0], self.image_shape[1]))
+        im2_gray = np.memmap(self.grayscale_images_temp_files[im2_path], mode="r", shape=(self.image_shape[0], self.image_shape[1]))
+        im2_rgb = np.memmap(self.rgb_images_temp_files[im2_path], mode="r+", shape=self.image_shape)
 
         # Define the motion model
         warp_mode = cv2.MOTION_TRANSLATION
@@ -81,18 +86,19 @@ class MainAlgorithm:
 
     # Compute the laplacian edges of an image
     def compute_laplacian_image(self, image_path, gaussian_blur_size, laplacian_kernel_size):
-        grayscale_image = np.memmap(image_path + grayscale_memmap_extension, mode="r", shape=(self.image_shape[0], self.image_shape[1]))
+        grayscale_image = np.memmap(self.grayscale_images_temp_files[image_path], mode="r", shape=(self.image_shape[0], self.image_shape[1]))
 
         blurred = cv2.GaussianBlur(grayscale_image, (gaussian_blur_size, gaussian_blur_size), 0)
         laplacian = cv2.Laplacian(blurred, cv2.CV_64F, ksize=laplacian_kernel_size)
 
         # Write to disk
-        memmapped_laplacian = np.memmap(image_path + laplacian_memmap_extension, mode="w+", shape=(self.image_shape[0], self.image_shape[1]), dtype="float64") # dtype="float64"!!
+        temp_laplacian_file = tempfile.NamedTemporaryFile()
+        memmapped_laplacian = np.memmap(temp_laplacian_file, mode="w+", shape=(self.image_shape[0], self.image_shape[1]), dtype="float64") # dtype="float64" !!
         memmapped_laplacian[:] = laplacian
+        self.laplacian_images_temp_files[image_path] = temp_laplacian_file  # Store temporary file
 
         del grayscale_image
         del memmapped_laplacian
-
         return True
 
     def stack_images(self, image_paths):
@@ -103,8 +109,8 @@ class MainAlgorithm:
         laplacian_images = []
         for im_path in image_paths:
             global SHAPE
-            rgb_images.append(np.memmap(im_path + rgb_memmap_extension, mode="r", shape=self.image_shape))
-            laplacian_images.append(np.memmap(im_path + laplacian_memmap_extension, mode="r", shape=(self.image_shape[0], self.image_shape[1]), dtype="float64"))
+            rgb_images.append(np.memmap(self.rgb_images_temp_files[im_path], mode="r", shape=self.image_shape))
+            laplacian_images.append(np.memmap(self.laplacian_images_temp_files[im_path], mode="r", shape=(self.image_shape[0], self.image_shape[1]), dtype="float64"))
 
         laplacian_images = np.asarray(laplacian_images)
         """
@@ -130,15 +136,21 @@ class MainAlgorithm:
         del laplacian_images
 
         # Write stacked image to memmap
-        stacked_memmap = np.memmap(stacked_memmap_filename, mode="w+", shape=self.image_shape)
+        stacked_temp_file = tempfile.NamedTemporaryFile()
+        stacked_memmap = np.memmap(stacked_temp_file, mode="w+", shape=self.image_shape)
         stacked_memmap[:] = output
+        self.stacked_image_temp_file = stacked_temp_file    # Store temp file
 
     # Export image to path
     def export_image(self, path):
-        output = np.memmap(stacked_memmap_filename, mode="r", shape=self.image_shape)
-        rgb = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
-        cv2.imwrite(path, rgb)
-        del output
+        if self.stacked_image_temp_file:
+            output = np.memmap(self.stacked_image_temp_file, mode="r", shape=self.image_shape)
+            rgb = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
+            cv2.imwrite(path, rgb)
+            del output
+            return True
+        else:
+            return False    # No stacked image
 
     def get_image_shape(self):
         return self.image_shape
