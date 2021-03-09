@@ -617,6 +617,7 @@ class MainLayout(qtw.QWidget):
     def __init__(self, parent):        
         super().__init__(parent)
         self.Algorithm = parent.Algorithm
+        self.Utilities = parent.Utilities
 
         self.list_widget = ImageListWidget(self)
         self.image_preview = ImageViewer(self)
@@ -654,21 +655,23 @@ class MainLayout(qtw.QWidget):
                 item = qtw.QListWidgetItem()                        # Filename on label
                 item.setText(Utilities.get_file_name(path))         # Display name only
                 item.setData(qtc.Qt.UserRole, path)                 # Add full path to data
+                np_array = self.Algorithm.getImageFromPath(path, "rgb")
+                if np_array.any():
+                    qPixMap = self.Utilities.numpyArrayToQPixMap(np_array)
+                    if qPixMap:
+                        item.setIcon(qtg.QIcon(qPixMap))
                 self.list_widget.loaded_images_list.addItem(item)   # Add item to list
         else:
             self.list_widget.loaded_images_list.addItems(self.list_widget.loaded_images_default) # Add default info texts
     
     # Update image of QGraphicsView
     def setLoadedImage(self, item):
-        image = self.Algorithm.getImageFromPath(item.data(qtc.Qt.UserRole), "rgb")
-        if image.any():
-            # Convert image from numpy array to QPixmap
-            height, width, _ = image.shape
-            bytes_per_line = 3 * width
-            qImage = qtg.QImage(image.data, width, height, bytes_per_line, qtg.QImage.Format_RGB888)
-
-            self.image_preview.setImage(qtg.QPixmap(qImage))    # Set image inside QGraphicsView
-            self.toggle_actions("image_preview", True)          # Enable Image preview menu
+        np_array = self.Algorithm.getImageFromPath(item.data(qtc.Qt.UserRole), "rgb")
+        if np_array.any():
+            qPixMap = self.Utilities.numpyArrayToQPixMap(np_array)
+            if qPixMap:
+                self.image_preview.setImage(qtg.QPixmap(qPixMap))    # Set image inside QGraphicsView
+                self.toggle_actions("image_preview", True)          # Enable Image preview menu
     
     # Set zoom reset on new image load of ImageViewer
     def setZoomReset(self, value):
@@ -680,7 +683,7 @@ class ImageListWidget(qtw.QWidget):
     aligned_images_list_default = ["Aligned images will appear here.", "Please load your images first,", "and align them from the 'processing' menu."]
     laplacian_images_list_default = ["Laplacian gradients (edge detection),", "of your images will appear here.", "Please load images first,", "and calulate their edges from the 'processing' menu."]
     stacked_image_list_default = ["The final stacked image will appear here.", "Please stack your images from the 'processing' menu."]
-    
+    gaussian_blurred_images_list_default = ["Gaussian blurred images will apear here.", "They are used to decrease noise, ", "and improve laplacian gradient quality."]
     def __init__(self, parent):
         super().__init__(parent)
 
@@ -698,6 +701,11 @@ class ImageListWidget(qtw.QWidget):
         self.aligned_images_list.setAlternatingRowColors(True)
         self.aligned_images_list.setSelectionMode(qtw.QAbstractItemView.ExtendedSelection)
         self.aligned_images_list.addItems(self.aligned_images_list_default)
+        # Gaussian blurred images
+        self.gaussian_blurred_images_list = qtw.QListWidget()
+        self.gaussian_blurred_images_list.setAlternatingRowColors(True)
+        self.gaussian_blurred_images_list.setSelectionMode(qtw.QAbstractItemView.ExtendedSelection)
+        self.gaussian_blurred_images_list.addItems(self.gaussian_blurred_images_list_default)
         # Laplacian images
         self.laplacian_images_list = qtw.QListWidget()
         self.laplacian_images_list.setAlternatingRowColors(True)
@@ -713,6 +721,7 @@ class ImageListWidget(qtw.QWidget):
         """
         self.processing_lists_tab = qtw.QTabWidget()
         self.processing_lists_tab.addTab(self.aligned_images_list, "Aligned images")
+        self.processing_lists_tab.addTab(self.gaussian_blurred_images_list, "Gaussian blurred images")
         self.processing_lists_tab.addTab(self.laplacian_images_list, "Laplacian images")
         self.processing_lists_tab.addTab(self.stacked_image_list, "Stacked image")
 
