@@ -483,7 +483,6 @@ class MainWindow(qtw.QMainWindow):
         laplacian_progress.exec_()
 
     def export_image(self):
-        print("Export image")
         dir = None
         if self.current_directory:
             dir = self.current_directory
@@ -501,7 +500,8 @@ class MainWindow(qtw.QMainWindow):
         
 
     def align_and_stack_images(self):
-        print("Align and stack images")
+        self.align_images()
+        self.stack_images()
 
     def clear_loaded_images(self):
         # Display confirmation dialog
