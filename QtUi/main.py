@@ -1,183 +1,14 @@
 import sys
 import collections
 from pathlib import Path
-import time
 import os
 import PyQt5.QtWidgets as qtw
 import PyQt5.QtCore as qtc
 import PyQt5.QtGui as qtg
-import numpy as np
 
-from utilities import Utilities
-Utilities = Utilities()
+import QThreadWorkers as QThreads
 
 SUPPORTED_IMAGE_FORMATS = "(*.jpg *.png)"
-
-class LoadImages(qtc.QThread):
-    finishedImage = qtc.pyqtSignal(str)
-    finished = qtc.pyqtSignal(dict)
-
-    def __init__(self, files, algorithm):
-        super().__init__()
-
-        self.files = files
-        self.is_killed = False
-
-        # Initialize algorithm
-        self.Algorithm = algorithm
-
-    def run(self):
-        start_time = time.time()
-        image_table = []
-        for image_path in self.files:
-            bool = self.Algorithm.load_image(image_path)
-
-            if not bool: # Operation failed
-                break
-
-            image_table.append(image_path) # Append loaded image to table
-
-            if self.is_killed:  # Operation stopped from UI (image load still successful)
-                break
-            # Send finished image path back to UI
-            self.finishedImage.emit(image_path)
-
-        # Operation ended
-        self.finished.emit({
-            "execution_time": round(time.time() - start_time, 4), 
-            "image_table": image_table, 
-            "killed_by_user": self.is_killed
-            }
-        )
-    
-    def kill(self):
-        self.is_killed = True
-
-class AlignImages(qtc.QThread):
-    finishedImage = qtc.pyqtSignal(list)
-    finished = qtc.pyqtSignal(dict)
-
-    def __init__(self, files, algorithm):
-        super().__init__()
-
-        self.files = files
-        self.is_killed = False
-
-        # Initialize algorithm
-        self.Algorithm = algorithm
-
-    def run(self):
-        start_time = time.time()
-        image0 = self.files[round(len(self.files)/2)] # Get middle image
-        aligned_images = [] # Table for processed images (to check if all have been loaded)
-        for image_path in self.files:
-            image0, image1, success = self.Algorithm.align_image(image0, image_path)
-
-            if not success or self.is_killed: # Operation failed or stopped from UI
-                break
-
-            aligned_images.append(image_path) # Append aligned image
-            # Send progress back to UI
-            self.finishedImage.emit([image0, image1])
-
-        # Operation ended
-        self.finished.emit({
-            "execution_time": round(time.time() - start_time, 4), 
-            "image_table": aligned_images, 
-            "killed_by_user": self.is_killed
-            }
-        )
-    
-    def kill(self):
-        self.is_killed = True
-
-class CalculateLaplacians(qtc.QThread):
-    image_finished = qtc.pyqtSignal(str)
-    finished = qtc.pyqtSignal(dict)
-
-    def __init__(self, files, gaussian_blur_size, laplacian_kernel_size, algorithm):
-        super().__init__()
-
-        self.start_time = 0
-        self.laplacian_success = False
-        self.is_killed = False
-
-        self.files = files
-        self.gaussian_blur_size = gaussian_blur_size
-        self.laplacian_kernel_size = laplacian_kernel_size
-
-        # Initialize algorithm
-        self.Algorithm = algorithm
-
-    def run(self):
-        self.start_time = time.time()
-        """
-            Compute laplacian edges
-        """
-        laplacian_images = [] # Table for processed laplacians
-        for image_path in self.files:
-            success = self.Algorithm.compute_laplacian_image(image_path, self.gaussian_blur_size, self.laplacian_kernel_size)
-
-            if not success or self.is_killed: # Operation failed or stopped from UI
-                break
-
-            laplacian_images.append(image_path) # Append aligned image
-            # Send progress back to UI
-            self.image_finished.emit(image_path)
-        
-        if collections.Counter(laplacian_images) == collections.Counter(self.files): # All laplacian images computed?
-            self.laplacian_success = True   # Laplacian edges computation success
-        
-        # Operation ended
-        self.finished.emit({
-            "execution_time": round(time.time() - self.start_time, 4),
-            "operation_success": self.laplacian_success,
-            "killed_by_user": self.is_killed
-            }
-        )
-    
-    # Kill operation
-    def kill(self):
-        self.is_killed = True
-
-class FinalStacking(qtc.QThread):
-    row_finished = qtc.pyqtSignal(int)
-    finished = qtc.pyqtSignal(dict)
-    def __init__(self, files, algoritm):
-        super().__init__()
-        self.files = files
-        self.Algorithm = algoritm
-        self.is_killed = False
-        self.stack_success = False
-        self.start_time = 0
-
-    def run(self):
-        """
-            Start stacking operation using previously computed laplacian images
-        """
-        self.start_time = time.time()
-        row_reference = 0
-        for current_row in self.Algorithm.stack_images(self.files):
-            if type(current_row) != int or self.is_killed:   # Operation failed or stopped from UI
-                break
-
-            self.row_finished.emit(current_row)
-            row_reference = current_row
-        
-        if row_reference == self.Algorithm.get_image_shape()[0]: # have all rows been processed?
-            self.stack_success = True
-
-        # Operation ended
-        self.finished.emit({
-            "execution_time": round(time.time() - self.start_time, 4),
-            "operation_success": self.stack_success,
-            "killed_by_user": self.is_killed
-            }
-        )
-    
-    def kill(self):
-        self.is_killed = True
-
 
 class MainWindow(qtw.QMainWindow):
     current_directory = None
@@ -239,7 +70,7 @@ class MainWindow(qtw.QMainWindow):
 
         self.image_preview_reset_zoom = qtw.QAction("&Reset zoom on preview", self, enabled=False, checkable=True, checked=True)
 
-        preferences_action = qtw.QAction("&Preferences", self, shortcut="Ctrl+P", triggered=self.open_preferences)
+        preferences_action = qtw.QAction("&Preferences", self, shortcut="Ctrl+P", triggered=lambda: self.Preferences.exec_())
 
         about_app_action = qtw.QAction("&About PyStacker", self, triggered=self.about_application)
         about_qt_action = qtw.QAction("&About Qt", self, triggered=qtw.qApp.aboutQt)
@@ -352,7 +183,7 @@ class MainWindow(qtw.QMainWindow):
             # Update progress slider
             image_progress.setValue(counter)
 
-        loading = LoadImages(self.loaded_image_files, self.Algorithm)
+        loading = QThreads.LoadImages(self.loaded_image_files, self.Algorithm)
         loading.finishedImage.connect(update_progress)  # Update progress callback
 
         def finished_loading(returned):
@@ -401,7 +232,7 @@ class MainWindow(qtw.QMainWindow):
             align_progress.setValue(counter)
 
 
-        aligning = AlignImages(self.loaded_image_files, self.Algorithm)
+        aligning = QThreads.AlignImages(self.loaded_image_files, self.Algorithm)
         aligning.finishedImage.connect(update_progress)
 
         def finished_loading(returned):
@@ -431,7 +262,7 @@ class MainWindow(qtw.QMainWindow):
         laplacian_progress.setWindowTitle("Calculating laplacians of " + str(len(self.loaded_image_files)) + " images.")
         laplacian_progress.setLabelText("Preparing to calculate laplacian gradients of your images. This shouldn't take long. Please wait.")
 
-        laplacian_calc = CalculateLaplacians(self.loaded_image_files, 5, 5, self.Algorithm)
+        laplacian_calc = QThreads.CalculateLaplacians(self.loaded_image_files, 5, 5, self.Algorithm)
 
         counter = 0
         def laplacian_progress_update(image_path):
@@ -461,7 +292,7 @@ class MainWindow(qtw.QMainWindow):
             stack_progress.setWindowTitle("Final stacking of image: " + str(self.Algorithm.get_image_shape()[0]) + " rows tall, " + str(self.Algorithm.get_image_shape()[1]) + " columns wide.")
             stack_progress.setLabelText("Preparing to calculate the final focus stack of your images. This shouldn't take long. Please wait.")
 
-            final_stacking = FinalStacking(self.loaded_image_files, self.Algorithm)
+            final_stacking = QThreads.FinalStacking(self.loaded_image_files, self.Algorithm)
 
             def row_progress_update(current_row):
                 stack_progress.setLabelText("Just calculated row " + str(current_row) + " of " + str(self.Algorithm.get_image_shape()[0]) + ".")
@@ -560,10 +391,10 @@ class MainWindow(qtw.QMainWindow):
             # Get names of files
             file_names = []
             for image_path in self.loaded_image_files:
-                file_names.append(Utilities.get_file_name(image_path) + ", ")
+                file_names.append(self.Utilities.get_file_name(image_path) + ", ")
 
             success_message.setDetailedText(''.join(str(file) for file in file_names)) # Display names inside "Detailed text"
-            success_message.setInformativeText("Execution time: " + Utilities.format_seconds(execution_time)) # Display execution time
+            success_message.setInformativeText("Execution time: " + self.Utilities.format_seconds(execution_time)) # Display execution time
             success_message.exec_()
 
         elif not killed_by_user: # Display error message (error occured)
@@ -603,9 +434,6 @@ class MainWindow(qtw.QMainWindow):
             self.align_and_stack_images_action.setEnabled(bool)
         elif menu_name == "image_preview":
             self.image_preview_reset_zoom.setEnabled(bool)
-
-    def open_preferences(self):
-        self.Preferences.exec_()
 
 # Main layout for MainWindow (splitter window)
 class MainLayout(qtw.QWidget):
@@ -647,20 +475,31 @@ class MainLayout(qtw.QWidget):
         self.list_widget.loaded_images_list.clear()
         self.image_paths = image_paths
 
-        if len(self.image_paths) > 0:
-            # Images loaded, display their names.
-            # Get names from paths
-            self.image_names = []
+        if len(self.image_paths) > 0:   # Images loaded, display their names.
+            items = {}
+            # Display list (without icons)
             for path in image_paths:
-                item = qtw.QListWidgetItem()                        # Filename on label
-                item.setText(Utilities.get_file_name(path))         # Display name only
-                item.setData(qtc.Qt.UserRole, path)                 # Add full path to data
-                np_array = self.Algorithm.getImageFromPath(path, "rgb")
-                if np_array.any():
-                    qPixMap = self.Utilities.numpyArrayToQPixMap(np_array)
-                    if qPixMap:
-                        item.setIcon(qtg.QIcon(qPixMap))
+                item = qtw.QListWidgetItem()
+                item.setText(self.Utilities.get_file_name(path))    # Display name
+                item.setData(qtc.Qt.UserRole, path)                 # Add full path to data (hidden)
                 self.list_widget.loaded_images_list.addItem(item)   # Add item to list
+                items[path] = item
+            """
+                Load icons procedurally.
+            """
+            # Downscale images to 2% of original
+            self.downscaling = QThreads.ScaleImages(image_paths, 2, self.Algorithm)
+
+            # Setup icon for an image
+            def setupIcon(ls):
+                path = ls[0]
+                qPixMap = ls[1]
+
+                item = items[path]
+                item.setIcon(qtg.QIcon(qPixMap))
+
+            self.downscaling.finishedImage.connect(setupIcon)
+            self.downscaling.start()
         else:
             self.list_widget.loaded_images_list.addItems(self.list_widget.loaded_images_default) # Add default info texts
     

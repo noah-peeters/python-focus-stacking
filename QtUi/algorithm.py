@@ -164,8 +164,13 @@ class MainAlgorithm:
         self.laplacian_images_temp_files = {}
         self.stacked_image_temp_file = None
     
+    # Get image (using tempfile) from path to tempfile
     def getImageFromPath(self, path, im_type):
         if im_type == "rgb":
             image = self.rgb_images_temp_files[path]
             if image:
                 return np.memmap(image, mode="r", shape=self.image_shape)
+    
+    def downscaleImage(self, image, scale_percent):
+        new_dim = (round(image.shape[1] * scale_percent / 100), round(image.shape[0] * scale_percent / 100))  # New width and height
+        return cv2.resize(image, new_dim, interpolation=cv2.INTER_AREA)
