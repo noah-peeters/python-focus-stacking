@@ -5,6 +5,8 @@ import os
 import PyQt5.QtWidgets as qtw
 import PyQt5.QtCore as qtc
 import PyQt5.QtGui as qtg
+import random
+import string
 
 import QThreadWorkers as QThreads
 
@@ -188,14 +190,10 @@ class MainWindow(qtw.QMainWindow):
 
         def finished_loading(returned):
             self.loaded_image_files = returned["image_table"]   # Set loaded images
-            """
-                Update listing of loaded images
-            """
-            self.main_layout.set_image_list(self.loaded_image_files)
+            # Update listing of loaded images
+            self.main_layout.set_image_list(self.loaded_image_files, "source", self.main_layout.list_widget.loaded_images_list)
 
-            """
-                Create pop-up on operation finish.
-            """
+            # Create pop-up on operation finish.
             props = {}
             props["progress_bar"] = image_progress
             # Success message
@@ -236,9 +234,11 @@ class MainWindow(qtw.QMainWindow):
         aligning.finishedImage.connect(update_progress)
 
         def finished_loading(returned):
-            """
-                Create pop-up on operation finish.
-            """
+            # Add aligned images to processing list widget
+            widget = self.main_layout.list_widget.aligned_images_list
+            self.main_layout.set_image_list(returned["image_table"], "aligned", widget)
+
+            # Create pop-up on operation finish.
             props = {}
             props["progress_bar"] = align_progress
             # Success message
@@ -247,7 +247,6 @@ class MainWindow(qtw.QMainWindow):
             props["success_message"].setWindowTitle("Images aligned successfully!")
             props["success_message"].setText(str(len(self.loaded_image_files)) + " images have been aligned.")
             props["success_message"].setStandardButtons(qtw.QMessageBox.Ok)
-
             self.result_message(returned, props)
 
         aligning.finished.connect(finished_loading)
@@ -262,7 +261,7 @@ class MainWindow(qtw.QMainWindow):
         laplacian_progress.setWindowTitle("Calculating laplacians of " + str(len(self.loaded_image_files)) + " images.")
         laplacian_progress.setLabelText("Preparing to calculate laplacian gradients of your images. This shouldn't take long. Please wait.")
 
-        laplacian_calc = QThreads.CalculateLaplacians(self.loaded_image_files, 5, 5, self.Algorithm)
+        self.laplacian_calc = QThreads.CalculateLaplacians(self.loaded_image_files, 5, 5, self.Algorithm)
 
         counter = 0
         def laplacian_progress_update(image_path):
@@ -272,6 +271,12 @@ class MainWindow(qtw.QMainWindow):
             laplacian_progress.setValue(counter)
 
         def laplacian_finished(returned):
+            # Add gaussian blurred and laplacian images to processing list widget
+            blurred_widget = self.main_layout.list_widget.gaussian_blurred_images_list
+            laplacian_widget = self.main_layout.list_widget.laplacian_images_list
+            self.main_layout.set_image_list(returned["image_table"], "gaussian", blurred_widget)
+            self.main_layout.set_image_list(returned["image_table"], "laplacian", laplacian_widget)
+
             props = {}
             props["progress_bar"] = laplacian_progress
             # Success message
@@ -292,7 +297,7 @@ class MainWindow(qtw.QMainWindow):
             stack_progress.setWindowTitle("Final stacking of image: " + str(self.Algorithm.get_image_shape()[0]) + " rows tall, " + str(self.Algorithm.get_image_shape()[1]) + " columns wide.")
             stack_progress.setLabelText("Preparing to calculate the final focus stack of your images. This shouldn't take long. Please wait.")
 
-            final_stacking = QThreads.FinalStacking(self.loaded_image_files, self.Algorithm)
+            self.final_stacking_thread = QThreads.FinalStacking(self.loaded_image_files, self.Algorithm)
 
             def row_progress_update(current_row):
                 stack_progress.setLabelText("Just calculated row " + str(current_row) + " of " + str(self.Algorithm.get_image_shape()[0]) + ".")
@@ -309,17 +314,21 @@ class MainWindow(qtw.QMainWindow):
                 props["success_message"].setStandardButtons(qtw.QMessageBox.Ok)
                 self.result_message(returned, props)
 
-            final_stacking.row_finished.connect(row_progress_update)
-            final_stacking.finished.connect(stack_finished)
+                # Add stacked image to processing list widget
+                stacked_widget = self.main_layout.list_widget.stacked_image_list
+                self.main_layout.set_image_list(returned["image_table"], "stacked", stacked_widget)
 
-            final_stacking.start()
+            self.final_stacking_thread.row_finished.connect(row_progress_update)
+            self.final_stacking_thread.finished.connect(stack_finished)
+
+            self.final_stacking_thread.start()
             stack_progress.exec_()
 
-        laplacian_calc.image_finished.connect(laplacian_progress_update)
-        laplacian_calc.finished.connect(laplacian_finished)
-        laplacian_progress.canceled.connect(laplacian_calc.kill)
+        self.laplacian_calc.imageFinished.connect(laplacian_progress_update)
+        self.laplacian_calc.finished.connect(laplacian_finished)
+        laplacian_progress.canceled.connect(self.laplacian_calc.kill)
 
-        laplacian_calc.start()
+        self.laplacian_calc.start()
         laplacian_progress.exec_()
 
     def export_image(self):
@@ -354,11 +363,11 @@ class MainWindow(qtw.QMainWindow):
         if reply == qtw.QMessageBox.Yes:
             # Clear (user confirmed)
             self.loaded_image_files = []
-            self.main_layout.set_image_list(self.loaded_image_files)    # Clear image list
-            self.toggle_actions("processing", False)                    # Toggle image processing actions off (no images loaded)
-            self.main_layout.image_preview.setImage(None)               # Remove image from preview
+            self.main_layout.set_image_list(self.loaded_image_files) # Clear all images lists
 
-            self.Algorithm.clearTempFiles() # Clear all temp files
+            self.toggle_actions("processing", False)        # Toggle image processing actions off (no images loaded)
+            self.main_layout.image_preview.setImage(None)   # Remove image from preview
+            self.Algorithm.clearTempFiles()                 # Clear all temp files
 
     # Display result message after operation finished
     def result_message(self, returned_table, props):
@@ -373,7 +382,10 @@ class MainWindow(qtw.QMainWindow):
             operation_success = returned_table["operation_success"]
         killed_by_user = returned_table["killed_by_user"]
 
-        progress_bar = props["progress_bar"]
+        progress_bar = None
+        if "progress_bar" in props:
+            progress_bar = props["progress_bar"]
+
         success_message = props["success_message"]
 
         if progress_bar:
@@ -381,12 +393,12 @@ class MainWindow(qtw.QMainWindow):
 
         # Get operation success
         success = None
-        if image_table:
+        if image_table and not operation_success:
             # Are all loaded images inside of returned table?
             success = collections.Counter(image_table) == collections.Counter(self.loaded_image_files)
         elif operation_success:
             success = operation_success
-
+        
         if success and not killed_by_user: # Display success message
             # Get names of files
             file_names = []
@@ -438,6 +450,7 @@ class MainWindow(qtw.QMainWindow):
 # Main layout for MainWindow (splitter window)
 class MainLayout(qtw.QWidget):
     image_names = []
+    downscaling_list = {}
     image_scale_factor = 1
     scale_step = 0.25
     image_scale_factor_range = [1, 5]
@@ -453,8 +466,12 @@ class MainLayout(qtw.QWidget):
         self.parent_status_bar = parent.statusBar()
         self.toggle_actions = parent.toggle_actions
 
-        # List widget image clicked, show preview
-        self.list_widget.loaded_images_list.itemClicked.connect(self.setLoadedImage)
+        # List widget clicked connections
+        self.list_widget.loaded_images_list.itemClicked.connect(lambda item: self.setLoadedImage(item, "source"))               # Loaded images --> display RGB preview
+        self.list_widget.aligned_images_list.itemClicked.connect(lambda item: self.setLoadedImage(item, "aligned"))             # Aligned images --> display RGB preview
+        self.list_widget.gaussian_blurred_images_list.itemClicked.connect(lambda item: self.setLoadedImage(item, "gaussian"))   # Gaussian blurred images --> display RGB preview
+        self.list_widget.laplacian_images_list.itemClicked.connect(lambda item: self.setLoadedImage(item, "laplacian"))         # Laplacian images --> display grayscale preview (float 64)
+        self.list_widget.stacked_image_list.itemClicked.connect(lambda item: self.setLoadedImage(item, "stacked"))              # Stacked image --> display RGB preview
 
         splitter = qtw.QSplitter()
         splitter.setChildrenCollapsible(False)
@@ -471,46 +488,67 @@ class MainLayout(qtw.QWidget):
         parent.image_preview_reset_zoom.triggered.connect(self.setZoomReset) # Reset zoom on new image lad, file menu connection
     
     # Update list of loaded images
-    def set_image_list(self, image_paths):
-        self.list_widget.loaded_images_list.clear()
+    def set_image_list(self, image_paths, im_type=None, widget=None):
         self.image_paths = image_paths
 
-        if len(self.image_paths) > 0:   # Images loaded, display their names.
+        if len(self.image_paths) > 0 and widget:   # Images loaded, display their names.
+            widget.clear()
             items = {}
             # Display list (without icons)
             for path in image_paths:
                 item = qtw.QListWidgetItem()
                 item.setText(self.Utilities.get_file_name(path))    # Display name
                 item.setData(qtc.Qt.UserRole, path)                 # Add full path to data (hidden)
-                self.list_widget.loaded_images_list.addItem(item)   # Add item to list
+                widget.addItem(item)    # Add item to list
                 items[path] = item
             """
                 Load icons procedurally.
             """
+            orig_name = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
             # Downscale images to 2% of original
-            self.downscaling = QThreads.ScaleImages(image_paths, 2, self.Algorithm)
+            self.downscaling_list[orig_name] = QThreads.ScaleImages(image_paths, 2, self.Algorithm, im_type)
 
             # Setup icon for an image
             def setupIcon(ls):
+                # Icon setup
                 path = ls[0]
                 qPixMap = ls[1]
-
                 item = items[path]
                 item.setIcon(qtg.QIcon(qPixMap))
+            
+            # Remove Thread from list on icon finished
+            def cleanup(_):
+                self.downscaling_list[orig_name] = None
 
-            self.downscaling.finishedImage.connect(setupIcon)
-            self.downscaling.start()
+            self.downscaling_list[orig_name].finishedImage.connect(setupIcon)
+            self.downscaling_list[orig_name].finished.connect(cleanup)
+            self.downscaling_list[orig_name].start()
         else:
-            self.list_widget.loaded_images_list.addItems(self.list_widget.loaded_images_default) # Add default info texts
+            # Loaded images have been removed --> clear all lists (add default info)
+            widget = self.list_widget
+
+            # Clear all
+            widget.loaded_images_list.clear()
+            widget.aligned_images_list.clear()
+            widget.gaussian_blurred_images_list.clear()
+            widget.laplacian_images_list.clear()
+            widget.stacked_image_list.clear()
+
+            # Add default info to every list
+            widget.loaded_images_list.addItems(widget.loaded_images_default)
+            widget.aligned_images_list.addItems(widget.aligned_images_list_default)
+            widget.gaussian_blurred_images_list.addItems(widget.gaussian_blurred_images_list_default)
+            widget.laplacian_images_list.addItems(widget.laplacian_images_list_default)
+            widget.stacked_image_list.addItems(widget.stacked_image_list_default)
     
     # Update image of QGraphicsView
-    def setLoadedImage(self, item):
-        np_array = self.Algorithm.getImageFromPath(item.data(qtc.Qt.UserRole), "rgb")
+    def setLoadedImage(self, item, im_type):
+        np_array = self.Algorithm.getImageFromPath(item.data(qtc.Qt.UserRole), im_type)
         if np_array.any():
             qPixMap = self.Utilities.numpyArrayToQPixMap(np_array)
             if qPixMap:
-                self.image_preview.setImage(qtg.QPixmap(qPixMap))    # Set image inside QGraphicsView
-                self.toggle_actions("image_preview", True)          # Enable Image preview menu
+                self.image_preview.setImage(qPixMap)        # Set image inside QGraphicsView
+                self.toggle_actions("image_preview", True)  # Enable Image preview menu
     
     # Set zoom reset on new image load of ImageViewer
     def setZoomReset(self, value):
@@ -520,9 +558,9 @@ class MainLayout(qtw.QWidget):
 class ImageListWidget(qtw.QWidget):
     loaded_images_default = ["Loaded images will appear here.", "Please load them in from the 'file' menu."]
     aligned_images_list_default = ["Aligned images will appear here.", "Please load your images first,", "and align them from the 'processing' menu."]
+    gaussian_blurred_images_list_default = ["Gaussian blurred images will apear here.", "They are used to decrease noise, ", "and improve laplacian gradient quality."]
     laplacian_images_list_default = ["Laplacian gradients (edge detection),", "of your images will appear here.", "Please load images first,", "and calulate their edges from the 'processing' menu."]
     stacked_image_list_default = ["The final stacked image will appear here.", "Please stack your images from the 'processing' menu."]
-    gaussian_blurred_images_list_default = ["Gaussian blurred images will apear here.", "They are used to decrease noise, ", "and improve laplacian gradient quality."]
     def __init__(self, parent):
         super().__init__(parent)
 

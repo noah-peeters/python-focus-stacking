@@ -5,7 +5,7 @@ import tempfile
 class MainAlgorithm:
     def __init__(self):
         self.image_shape = []
-        self.final_stack_row_increment = 75
+        self.final_stack_row_increment = 25
 
         # Setup dictionaries for storing temporary matrices (loaded/processed images)
         self.clearTempFiles()
@@ -79,7 +79,7 @@ class MainAlgorithm:
         temp_aligned_rgb = tempfile.NamedTemporaryFile()
         aligned_rgb = np.memmap(temp_aligned_rgb, mode="w+", shape=self.image_shape)
         aligned_rgb[:] = im2_aligned
-        self.rgb_images_temp_files[im2_path] = temp_aligned_rgb  # Keep reference to temporary file
+        self.aligned_images_temp_files[im2_path] = temp_aligned_rgb  # Keep reference to temporary file
 
         return im1_path, im2_path, True # Operation success
 
@@ -120,7 +120,7 @@ class MainAlgorithm:
             laplacian_images.append(np.memmap(self.laplacian_images_temp_files[im_path], mode="r", shape=(self.image_shape[0], self.image_shape[1]), dtype="float64"))
 
         laplacian_images = np.asarray(laplacian_images)
-        
+
         """
             Calculate output image
         """
@@ -174,10 +174,23 @@ class MainAlgorithm:
     
     # Get image (using tempfile) from path to tempfile
     def getImageFromPath(self, path, im_type):
-        if im_type == "rgb":
+        # Get image from path
+        image = None
+        if im_type == "source":
             image = self.rgb_images_temp_files[path]
-            if image:
-                return np.memmap(image, mode="r", shape=self.image_shape)
+            return np.memmap(image, mode="r", shape=self.image_shape)
+        elif im_type == "aligned":
+            image = self.aligned_images_temp_files[path]
+            return np.memmap(image, mode="r", shape=self.image_shape)
+        elif im_type == "gaussian":
+            image = self.gaussian_blurred_images_temp_files[path]
+            return np.memmap(image, mode="r", shape=(self.image_shape[0], self.image_shape[1]))
+        elif im_type == "laplacian":
+            image = self.laplacian_images_temp_files[path]
+            return np.memmap(image, mode="r", shape=(self.image_shape[0], self.image_shape[1]), dtype="float64")
+        elif im_type == "stacked":
+            image = self.stacked_image_temp_file
+            return np.memmap(image, mode="r", shape=self.image_shape)
     
     def downscaleImage(self, image, scale_percent):
         new_dim = (round(image.shape[1] * scale_percent / 100), round(image.shape[0] * scale_percent / 100))  # New width and height

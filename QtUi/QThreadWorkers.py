@@ -90,7 +90,7 @@ class AlignImages(qtc.QThread):
 
 # Gaussian blur images and calculate their laplacian gradients on a separate thread
 class CalculateLaplacians(qtc.QThread):
-    image_finished = qtc.pyqtSignal(str)
+    imageFinished = qtc.pyqtSignal(str)
     finished = qtc.pyqtSignal(dict)
 
     def __init__(self, files, gaussian_blur_size, laplacian_kernel_size, algorithm):
@@ -121,13 +121,14 @@ class CalculateLaplacians(qtc.QThread):
 
             laplacian_images.append(image_path) # Append aligned image
             # Send progress back to UI
-            self.image_finished.emit(image_path)
+            self.imageFinished.emit(image_path)
         
         if collections.Counter(laplacian_images) == collections.Counter(self.files): # All laplacian images computed?
             self.laplacian_success = True   # Laplacian edges computation success
         
         # Operation ended
         self.finished.emit({
+            "image_table": laplacian_images,
             "execution_time": round(time.time() - self.start_time, 4),
             "operation_success": self.laplacian_success,
             "killed_by_user": self.is_killed
@@ -162,12 +163,14 @@ class FinalStacking(qtc.QThread):
 
             self.row_finished.emit(current_row)
             row_reference = current_row
-        
+
         if row_reference == self.Algorithm.get_image_shape()[0]: # have all rows been processed?
             self.stack_success = True
-
+        
         # Operation ended
+        print(self.Algorithm.stacked_image_temp_file.name)
         self.finished.emit({
+            "image_table": [self.Algorithm.stacked_image_temp_file.name],
             "execution_time": round(time.time() - self.start_time, 4),
             "operation_success": self.stack_success,
             "killed_by_user": self.is_killed
@@ -180,17 +183,21 @@ class FinalStacking(qtc.QThread):
 # (Down)scale images on a separate thread.
 class ScaleImages(qtc.QThread):
     finishedImage = qtc.pyqtSignal(list)
+    finished = qtc.pyqtSignal(bool)
 
-    def __init__(self, image_paths, scale_factor, algorithm):
+    def __init__(self, image_paths, scale_factor, algorithm, im_type):
         super().__init__()
         self.image_paths = image_paths
         self.scale_factor = scale_factor
         self.Algorithm = algorithm
+        self.im_type = im_type
 
         self.Utilities = Utilities()
 
     def run(self):
         for path in self.image_paths:
-            np_array = self.Algorithm.getImageFromPath(path, "rgb")                     # Get (rgb) image
-            scaled = self.Algorithm.downscaleImage(np_array, self.scale_factor)         # Downscale image to scale_factor (percentage) of original  
-            self.finishedImage.emit([path, self.Utilities.numpyArrayToQPixMap(scaled)]) # Convert image to QPixmap
+            np_array = self.Algorithm.getImageFromPath(path, self.im_type)  # Get image
+            if np_array.any():
+                scaled = self.Algorithm.downscaleImage(np_array, self.scale_factor)         # Downscale image to scale_factor (percentage) of original  
+                self.finishedImage.emit([path, self.Utilities.numpyArrayToQPixMap(scaled)]) # Convert image to QPixmap
+        self.finished.emit(True)
