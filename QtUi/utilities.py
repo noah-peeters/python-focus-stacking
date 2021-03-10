@@ -43,12 +43,7 @@ class Utilities:
                 else:
                     qImage = qimage2ndarray.array2qimage(array)
             elif array.dtype == "float64":
-                # arr = array.astype(np.int64)
-                # # pack the 16 bit values of arr into the red, green, and blue channels
-                # rgb = arr << 48 | arr << 32 | arr << 16 | 0xffff
-                # im = qtg.QImage(rgb, rgb.shape[0], rgb.shape[1], qtg.QImage.Format_RGBA64)
-                # return qtg.QPixmap.fromImage(im)
-
                 qImage = qimage2ndarray.array2qimage(array)
+            
             if qImage:
                 return qtg.QPixmap(qImage)

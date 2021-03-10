@@ -5,7 +5,6 @@ import tempfile
 class MainAlgorithm:
     def __init__(self):
         self.image_shape = []
-        self.final_stack_row_increment = 25
 
         # Setup dictionaries for storing temporary matrices (loaded/processed images)
         self.clearTempFiles()
@@ -34,16 +33,23 @@ class MainAlgorithm:
         return True # Successfully loaded image to memmap
     
     # Align a single image
-    def align_image(self, im1_path, im2_path):
+    def align_image(self, im1_path, im2_path, parameters):
         # Get memmap's
         im1_gray = np.memmap(self.grayscale_images_temp_files[im1_path], mode="r", shape=(self.image_shape[0], self.image_shape[1]))
         im2_gray = np.memmap(self.grayscale_images_temp_files[im2_path], mode="r", shape=(self.image_shape[0], self.image_shape[1]))
         im2_rgb = np.memmap(self.rgb_images_temp_files[im2_path], mode="r", shape=self.image_shape)
 
-        # Define the motion model
-        warp_mode = cv2.MOTION_TRANSLATION
-        # warp_mode = cv2.MOTION_HOMOGRAPHY
-        # warp_mode = cv2.MOTION_AFFINE
+        # Get motion model from parameters
+        warp_mode = cv2.MOTION_TRANSLATION  # Default
+        mode = parameters["WarpMode"]
+        if mode == "Translation":
+            warp_mode = cv2.MOTION_TRANSLATION
+        elif mode =="Affine":
+            warp_mode = cv2.MOTION_AFFINE
+        elif mode == "Euclidean":
+            warp_mode = cv2.MOTION_EUCLIDEAN
+        elif mode == "Homography":
+            warp_mode = cv2.MOTION_HOMOGRAPHY
 
         # Define 2x3 or 3x3 matrices
         if warp_mode == cv2.MOTION_HOMOGRAPHY:
@@ -53,16 +59,25 @@ class MainAlgorithm:
 
         # Specify the number of iterations.
         number_of_iterations = 5000
+        if parameters["NumberOfIterations"]:
+            number_of_iterations = parameters["NumberOfIterations"]
 
         # Specify the threshold of the increment
         # in the correlation coefficient between two iterations
         termination_eps = 1e-8
+        if parameters["TerminationEpsilon"]:
+            termination_eps = 1*10**(-parameters["TerminationEpsilon"])
 
         # Define termination criteria
         criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, number_of_iterations,  termination_eps)
 
+        # Get gaussian blur size
+        gaussian_blur_size = 5
+        if parameters["GaussianBlur"]:
+            gaussian_blur_size = parameters["GaussianBlur"]
+
         # Run the ECC algorithm. The results are stored in warp_matrix.
-        (_, warp_matrix) = cv2.findTransformECC(im1_gray, im2_gray, warp_matrix, warp_mode, criteria, None, 5)
+        _, warp_matrix = cv2.findTransformECC(im1_gray, im2_gray, warp_matrix, warp_mode, criteria, None, gaussian_blur_size)
         del im1_gray
         del im2_gray
 
@@ -125,17 +140,13 @@ class MainAlgorithm:
             Calculate output image
         """
         output = np.zeros(shape=rgb_images[0].shape, dtype=rgb_images[0].dtype)
-        counter = 0
         for y in range(0, rgb_images[0].shape[0]):             # Loop through vertical pixels (rows)
-            counter += 1
             for x in range(0, rgb_images[0].shape[1]):         # Loop through horizontal pixels (columns)
                 yxlaps = abs(laplacian_images[:, y, x])        # Absolute value of laplacian at this pixel
                 index = (np.where(yxlaps == max(yxlaps)))[0][0]
                 output[y, x] = rgb_images[index][y, x]         # Write focus pixel to output image
             
-            if counter >= self.final_stack_row_increment:
-                counter = 0
-                yield y # Send progress back to UI (every increment rows)
+            yield y # Send progress back to UI (every row)
 
         yield rgb_images[0].shape[0] # Finished
         

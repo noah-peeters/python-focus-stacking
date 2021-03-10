@@ -9,6 +9,7 @@ import random
 import string
 
 import QThreadWorkers as QThreads
+import ParametersPopUp
 
 SUPPORTED_IMAGE_FORMATS = "(*.jpg *.png)"
 
@@ -212,48 +213,57 @@ class MainWindow(qtw.QMainWindow):
         image_progress.exec_()
     
     def align_images(self):
-        # Progress bar
-        align_progress = self.create_progress_bar()
-        align_progress.setWindowTitle("Aligning " + str(len(self.loaded_image_files)) + " images.")
-        align_progress.setLabelText("Preparing to align your images. This shouldn't take long. Please wait.")
+        def proceedToAlign(parameters, popup):
+            if not parameters:
+                return # Some value was entered incorrectly, retry
+            
+            popup.close()   # Close parameters window
+            # Progress bar
+            align_progress = self.create_progress_bar()
+            align_progress.setWindowTitle("Aligning " + str(len(self.loaded_image_files)) + " images.")
+            align_progress.setLabelText("Preparing to align your images. This shouldn't take long. Please wait.")
 
-        counter = 0
-        def update_progress(l):
-            nonlocal counter
-            image0 = l[0]
-            image1 = l[1]
-            # update label text
-            align_progress.setLabelText("Just aligned: " + self.Utilities.get_file_name(image1) + " to: " + self.Utilities.get_file_name(image0))
-            counter += 1
+            counter = 0
+            def update_progress(l):
+                nonlocal counter
+                image0 = l[0]
+                image1 = l[1]
+                # update label text
+                align_progress.setLabelText("Just aligned: " + self.Utilities.get_file_name(image1) + " to: " + self.Utilities.get_file_name(image0))
+                counter += 1
 
-            # Update progress slider
-            align_progress.setValue(counter)
+                # Update progress slider
+                align_progress.setValue(counter)
 
 
-        aligning = QThreads.AlignImages(self.loaded_image_files, self.Algorithm)
-        aligning.finishedImage.connect(update_progress)
+            aligning = QThreads.AlignImages(self.loaded_image_files, parameters, self.Algorithm)
+            aligning.finishedImage.connect(update_progress)
 
-        def finished_loading(returned):
-            # Add aligned images to processing list widget
-            widget = self.main_layout.list_widget.aligned_images_list
-            self.main_layout.set_image_list(returned["image_table"], "aligned", widget)
+            def finished_loading(returned):
+                # Add aligned images to processing list widget
+                widget = self.main_layout.list_widget.aligned_images_list
+                self.main_layout.set_image_list(returned["image_table"], "aligned", widget)
 
-            # Create pop-up on operation finish.
-            props = {}
-            props["progress_bar"] = align_progress
-            # Success message
-            props["success_message"] = qtw.QMessageBox(self)
-            props["success_message"].setIcon(qtw.QMessageBox.Information)
-            props["success_message"].setWindowTitle("Images aligned successfully!")
-            props["success_message"].setText(str(len(self.loaded_image_files)) + " images have been aligned.")
-            props["success_message"].setStandardButtons(qtw.QMessageBox.Ok)
-            self.result_message(returned, props)
+                # Create pop-up on operation finish.
+                props = {}
+                props["progress_bar"] = align_progress
+                # Success message
+                props["success_message"] = qtw.QMessageBox(self)
+                props["success_message"].setIcon(qtw.QMessageBox.Information)
+                props["success_message"].setWindowTitle("Images aligned successfully!")
+                props["success_message"].setText(str(len(self.loaded_image_files)) + " images have been aligned.")
+                props["success_message"].setStandardButtons(qtw.QMessageBox.Ok)
+                self.result_message(returned, props)
 
-        aligning.finished.connect(finished_loading)
-        align_progress.canceled.connect(aligning.kill) # Kill operation on "cancel" press
+            aligning.finished.connect(finished_loading)
+            align_progress.canceled.connect(aligning.kill) # Kill operation on "cancel" press
 
-        aligning.start()
-        align_progress.exec_()
+            aligning.start()
+            align_progress.exec_()
+        
+        # Settings popup for image alignment
+        popup = ParametersPopUp.AlignImagesPopUp(proceedToAlign)
+        popup.exec_()
 
     def stack_images(self):
         # Laplacians progress bar
@@ -304,6 +314,10 @@ class MainWindow(qtw.QMainWindow):
                 stack_progress.setValue(current_row)
 
             def stack_finished(returned):
+                # Add stacked image to processing list widget
+                stacked_widget = self.main_layout.list_widget.stacked_image_list
+                self.main_layout.set_image_list(returned["image_table"], "stacked", stacked_widget)
+
                 props = {}
                 props["progress_bar"] = stack_progress
                 # Success message
@@ -313,10 +327,6 @@ class MainWindow(qtw.QMainWindow):
                 props["success_message"].setText("The final stack has successfully been calculated.")
                 props["success_message"].setStandardButtons(qtw.QMessageBox.Ok)
                 self.result_message(returned, props)
-
-                # Add stacked image to processing list widget
-                stacked_widget = self.main_layout.list_widget.stacked_image_list
-                self.main_layout.set_image_list(returned["image_table"], "stacked", stacked_widget)
 
             self.final_stacking_thread.row_finished.connect(row_progress_update)
             self.final_stacking_thread.finished.connect(stack_finished)
@@ -504,7 +514,13 @@ class MainLayout(qtw.QWidget):
             """
                 Load icons procedurally.
             """
-            orig_name = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
+            # Get random (and original) name
+            orig_name = None
+            while True:
+                orig_name = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
+                if not orig_name in self.downscaling_list:
+                    break   # Name is unique
+
             # Downscale images to 2% of original
             self.downscaling_list[orig_name] = QThreads.ScaleImages(image_paths, 2, self.Algorithm, im_type)
 
@@ -718,7 +734,6 @@ class Preferences(qtw.QDialog):
 
         # Load saved settings
         self.settings = qtc.QSettings("PyStacker", "Preferences")
-        #self.settings.remove("Preferences")
         self.load_settings()
 
     # Load saved settings
