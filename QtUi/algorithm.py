@@ -1,19 +1,14 @@
 import numpy as np
 import cv2
 import tempfile
-import dask
 
 class MainAlgorithm:
     def __init__(self):
         self.image_shape = []
         self.final_stack_row_increment = 75
 
-        # Dictionaries for storing temporary matrices (loaded/processed images)
-        self.rgb_images_temp_files = {}
-        self.grayscale_images_temp_files = {}
-        self.aligned_images_temp_files = {}
-        self.laplacian_images_temp_files = {}
-        self.stacked_image_temp_file = None
+        # Setup dictionaries for storing temporary matrices (loaded/processed images)
+        self.clearTempFiles()
 
     # Load a single image
     def load_image(self, image_path):
@@ -43,7 +38,7 @@ class MainAlgorithm:
         # Get memmap's
         im1_gray = np.memmap(self.grayscale_images_temp_files[im1_path], mode="r", shape=(self.image_shape[0], self.image_shape[1]))
         im2_gray = np.memmap(self.grayscale_images_temp_files[im2_path], mode="r", shape=(self.image_shape[0], self.image_shape[1]))
-        im2_rgb = np.memmap(self.rgb_images_temp_files[im2_path], mode="r+", shape=self.image_shape)
+        im2_rgb = np.memmap(self.rgb_images_temp_files[im2_path], mode="r", shape=self.image_shape)
 
         # Define the motion model
         warp_mode = cv2.MOTION_TRANSLATION
@@ -68,20 +63,23 @@ class MainAlgorithm:
 
         # Run the ECC algorithm. The results are stored in warp_matrix.
         (_, warp_matrix) = cv2.findTransformECC(im1_gray, im2_gray, warp_matrix, warp_mode, criteria, None, 5)
+        del im1_gray
+        del im2_gray
 
         if warp_mode == cv2.MOTION_HOMOGRAPHY:
             # Use warpPerspective for Homography
-            im2_aligned = cv2.warpPerspective (im2_rgb, warp_matrix, (self.image_shape[1], self.image_shape[0]), flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
+            im2_aligned = cv2.warpPerspective(im2_rgb, warp_matrix, (self.image_shape[1], self.image_shape[0]), flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
         else:
             # Use warpAffine for Translation, Euclidean and Affine
             im2_aligned = cv2.warpAffine(im2_rgb, warp_matrix, (self.image_shape[1], self.image_shape[0]), flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
-        
-        # Overwrite RGB memmap of second image
-        im2_rgb[:] = im2_aligned
 
-        del im1_gray
-        del im2_gray
         del im2_rgb
+        
+        # Write aligned to new memmap (tempfile)
+        temp_aligned_rgb = tempfile.NamedTemporaryFile()
+        aligned_rgb = np.memmap(temp_aligned_rgb, mode="w+", shape=self.image_shape)
+        aligned_rgb[:] = im2_aligned
+        self.rgb_images_temp_files[im2_path] = temp_aligned_rgb  # Keep reference to temporary file
 
         return im1_path, im2_path, True # Operation success
 
@@ -91,29 +89,38 @@ class MainAlgorithm:
 
         blurred = cv2.GaussianBlur(grayscale_image, (gaussian_blur_size, gaussian_blur_size), 0)
         laplacian = cv2.Laplacian(blurred, cv2.CV_64F, ksize=laplacian_kernel_size)
+        del grayscale_image
 
-        # Write to disk
+        # Write gaussian blurred to disk
+        temp_gaussian_blurred_file = tempfile.NamedTemporaryFile()
+        memmapped_blur = np.memmap(temp_gaussian_blurred_file, mode="w+", shape=(self.image_shape[0], self.image_shape[1]), dtype=blurred.dtype)
+        memmapped_blur[:] = blurred
+        self.gaussian_blurred_images_temp_files[image_path] = temp_gaussian_blurred_file  # Store temporary file
+        del memmapped_blur
+
+        # Write laplacian to disk
         temp_laplacian_file = tempfile.NamedTemporaryFile()
-        memmapped_laplacian = np.memmap(temp_laplacian_file, mode="w+", shape=(self.image_shape[0], self.image_shape[1]), dtype="float64") # dtype="float64" !!
+        memmapped_laplacian = np.memmap(temp_laplacian_file, mode="w+", shape=(self.image_shape[0], self.image_shape[1]), dtype=laplacian.dtype) # dtype="float64" !!
         memmapped_laplacian[:] = laplacian
         self.laplacian_images_temp_files[image_path] = temp_laplacian_file  # Store temporary file
-
-        del grayscale_image
         del memmapped_laplacian
+
         return True
 
+    # Calculate output image (final stacking)
     def stack_images(self, image_paths):
         """
             Load rgb images and laplacian gradients
+            Try using aligned RGB images (if there), or use source RGB images
         """
         rgb_images = []
         laplacian_images = []
         for im_path in image_paths:
-            global SHAPE
-            rgb_images.append(np.memmap(self.rgb_images_temp_files[im_path], mode="r", shape=self.image_shape))
+            rgb_images.append(np.memmap(self.useSource_or_Aligned()[im_path], mode="r", shape=self.image_shape))
             laplacian_images.append(np.memmap(self.laplacian_images_temp_files[im_path], mode="r", shape=(self.image_shape[0], self.image_shape[1]), dtype="float64"))
 
         laplacian_images = np.asarray(laplacian_images)
+        
         """
             Calculate output image
         """
@@ -156,11 +163,12 @@ class MainAlgorithm:
     def get_image_shape(self):
         return self.image_shape
     
-    # Clear all temp files
+    # Clear all temp file references (Python will garbage-collect tempfiles automatically once they aren't referenced)
     def clearTempFiles(self):
         self.rgb_images_temp_files = {}
         self.grayscale_images_temp_files = {}
         self.aligned_images_temp_files = {}
+        self.gaussian_blurred_images_temp_files = {}
         self.laplacian_images_temp_files = {}
         self.stacked_image_temp_file = None
     
@@ -174,3 +182,10 @@ class MainAlgorithm:
     def downscaleImage(self, image, scale_percent):
         new_dim = (round(image.shape[1] * scale_percent / 100), round(image.shape[0] * scale_percent / 100))  # New width and height
         return cv2.resize(image, new_dim, interpolation=cv2.INTER_AREA)
+    
+    # Return aligned RGB images (if any) or return source RGB images 
+    def useSource_or_Aligned(self):
+        if len(self.aligned_images_temp_files) > 0:
+            return self.aligned_images_temp_files   # Use aligned images
+        else:
+            return self.rgb_images_temp_files       # Use non-aligned source images
