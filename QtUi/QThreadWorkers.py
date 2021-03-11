@@ -92,7 +92,7 @@ class CalculateLaplacians(qtc.QThread):
     imageFinished = qtc.pyqtSignal(str)
     finished = qtc.pyqtSignal(dict)
 
-    def __init__(self, files, gaussian_blur_size, laplacian_kernel_size, algorithm):
+    def __init__(self, files, parameters, algorithm):
         super().__init__()
 
         self.start_time = 0
@@ -100,8 +100,7 @@ class CalculateLaplacians(qtc.QThread):
         self.is_killed = False
 
         self.files = files
-        self.gaussian_blur_size = gaussian_blur_size
-        self.laplacian_kernel_size = laplacian_kernel_size
+        self.parameters = parameters
 
         # Initialize algorithm
         self.Algorithm = algorithm
@@ -113,7 +112,7 @@ class CalculateLaplacians(qtc.QThread):
         """
         laplacian_images = [] # Table for processed laplacians
         for image_path in self.files:
-            success = self.Algorithm.compute_laplacian_image(image_path, self.gaussian_blur_size, self.laplacian_kernel_size)
+            success = self.Algorithm.compute_laplacian_image(image_path, self.parameters)
 
             if not success or self.is_killed: # Operation failed or stopped from UI
                 break

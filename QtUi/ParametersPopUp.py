@@ -16,13 +16,13 @@ class AlignImagesPopUp(qtw.QDialog):
         self.warp_mode_input.insertItems(0, ["Translation", "Affine", "Euclidean", "Homography"])
 
         # Number of iterations slider
-        self.number_of_iterations_input = Slider(100, 10000, 5000)
+        self.number_of_iterations_input = Slider(100, 15000, 5000)
 
         # Termination epsilon slider
-        self.termination_epsilon_input = Slider(2, 15, 8)
+        self.termination_epsilon_input = Slider(2, 30, 8)
 
         # Gaussian blur size
-        self.gaussian_blur_size_input = Slider(0, 15, 5)
+        self.gaussian_blur_size_input = Slider(0, 20, 5)
 
         apply_button = qtw.QPushButton()
         apply_button.setText("Apply")
@@ -40,11 +40,9 @@ class AlignImagesPopUp(qtw.QDialog):
     def applySettings(self):
         val = self.gaussian_blur_size_input.slider.value()
         if val % 2 == 0 and val != 0:
-            print("error")
             # Gaussian blur has even value --> show error message and retry
-            qtw.QMessageBox.critical(self, "Gaussian blur error", "Gaussian blur size must be an odd number (e.g. 1, 3, 5 etc.", qtw.QMessageBox.Ok)
+            qtw.QMessageBox.critical(self, "Gaussian blur error", "Gaussian blur size must be an odd number (e.g.: 1, 3, 5 etc.)", qtw.QMessageBox.Ok)
         else:
-            print("success")
             # Gaussian blur has uneven value --> proceed to image alignment
             self.func_to_run({
                 "WarpMode": self.warp_mode_input.currentText(),
@@ -55,6 +53,49 @@ class AlignImagesPopUp(qtw.QDialog):
             self
             )
 
+class StackImagesPopUp(qtw.QDialog):
+    def __init__(self, func_to_run):
+        super().__init__()
+        self.func_to_run = func_to_run
+        self.setWindowTitle("Settings for image stacking")
+        self.setWindowModality(qtc.Qt.ApplicationModal)
+
+        # Gaussian blur size
+        self.gaussian_blur_size_input = Slider(0, 40, 5)
+        # laplacian kernel size
+        self.laplacian_kernel_size = Slider(1, 31, 5)
+
+        apply_button = qtw.QPushButton()
+        apply_button.setText("Apply")
+        apply_button.clicked.connect(self.applySettings)
+
+        form_layout = qtw.QFormLayout()
+        form_layout.addRow("Gaussian blur size:", self.gaussian_blur_size_input)
+        form_layout.addRow("Laplacian kernel size:", self.laplacian_kernel_size)
+        form_layout.addWidget(apply_button)
+
+        self.setLayout(form_layout)
+
+    def applySettings(self):
+        gaussian_val = self.gaussian_blur_size_input.slider.value()
+        laplacian_val = self.laplacian_kernel_size.slider.value()
+        continue_bool = True
+        if gaussian_val % 2 == 0 and gaussian_val != 0:
+            continue_bool = False
+            # Gaussian blur has even value --> show error message and retry
+            qtw.QMessageBox.critical(self, "Gaussian blur error", "Gaussian blur size must be an odd number (e.g.: 1, 3, 5 etc.)", qtw.QMessageBox.Ok)
+        elif laplacian_val % 2 == 0:
+            continue_bool = False
+            # laplacian has even value --> show error message and retry
+            qtw.QMessageBox.critical(self, "Laplacian kernel size error", "Laplacian kernel size must be an odd number (e.g.: 1, 3, 5 etc.)", qtw.QMessageBox.Ok)
+
+        if continue_bool == True:
+            self.func_to_run({
+                "GaussianBlur": gaussian_val,
+                "LaplacianKernel": laplacian_val,
+            }, 
+            self
+            )
 class Slider(qtw.QWidget):
     def __init__(self, min_range, max_range, default_value):
         super().__init__()

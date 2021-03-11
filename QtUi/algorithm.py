@@ -99,11 +99,15 @@ class MainAlgorithm:
         return im1_path, im2_path, True # Operation success
 
     # Compute the laplacian edges of an image
-    def compute_laplacian_image(self, image_path, gaussian_blur_size, laplacian_kernel_size):
+    def compute_laplacian_image(self, image_path, parameters):
         grayscale_image = np.memmap(self.grayscale_images_temp_files[image_path], mode="r", shape=(self.image_shape[0], self.image_shape[1]))
 
-        blurred = cv2.GaussianBlur(grayscale_image, (gaussian_blur_size, gaussian_blur_size), 0)
-        laplacian = cv2.Laplacian(blurred, cv2.CV_64F, ksize=laplacian_kernel_size)
+        blurred = grayscale_image
+        if parameters["GaussianBlur"] != 0:
+            # Blur image
+            blurred = cv2.GaussianBlur(grayscale_image, (parameters["GaussianBlur"], parameters["GaussianBlur"]), 0)
+
+        laplacian = cv2.Laplacian(blurred, cv2.CV_64F, ksize=parameters["LaplacianKernel"])
         del grayscale_image
 
         # Write gaussian blurred to disk
