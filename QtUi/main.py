@@ -468,7 +468,7 @@ class MainWindow(qtw.QMainWindow):
 
 # Main layout for MainWindow (splitter window)
 class MainLayout(qtw.QWidget):
-    image_names = []
+    image_paths = []
     downscaling_list = {}
     image_scale_factor = 1
     scale_step = 0.25
@@ -568,12 +568,13 @@ class MainLayout(qtw.QWidget):
     
     # Update image of QGraphicsView
     def setLoadedImage(self, item, im_type):
-        np_array = self.Algorithm.getImageFromPath(item.data(qtc.Qt.UserRole), im_type)
-        if np_array.any():
-            qPixMap = self.Utilities.numpyArrayToQPixMap(np_array)
-            if qPixMap:
-                self.image_preview.setImage(qPixMap)        # Set image inside QGraphicsView
-                self.toggle_actions("image_preview", True)  # Enable Image preview menu
+        if len(self.image_paths) > 0:    # Check if images have been loaded
+            np_array = self.Algorithm.getImageFromPath(item.data(qtc.Qt.UserRole), im_type)
+            if np_array.any():
+                qPixMap = self.Utilities.numpyArrayToQPixMap(np_array)
+                if qPixMap:
+                    self.image_preview.setImage(qPixMap)        # Set image inside QGraphicsView
+                    self.toggle_actions("image_preview", True)  # Enable Image preview menu
     
     # Set zoom reset on new image load of ImageViewer
     def setZoomReset(self, value):
@@ -765,6 +766,8 @@ class Preferences(qtw.QDialog):
         index = self.theme_setting.findText(applied_theme)
         if index != -1:   # -1 is not found
             self.theme_setting.setCurrentIndex(index)
+        
+        self.close()    # Close preferences window
     
     # Set a color theme
     def set_color_theme(self, theme_name):
