@@ -15,6 +15,13 @@
       "request": "launch",
       "program": "focus_stack/StackImages.py",
       "console": "integratedTerminal"
+    },
+    {
+      "name": "Python: QtStackImages.py",
+      "type": "python",
+      "request": "launch",
+      "program": "QtUi/main.py",
+      "console": "integratedTerminal"
     }
   ]
 }
