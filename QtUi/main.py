@@ -9,7 +9,7 @@ import random
 import string
 
 import QtUi.QThreadWorkers as QThreads
-import QtUi.ParametersPopUp
+import QtUi.ParametersPopUp as ParametersPopUp
 
 SUPPORTED_IMAGE_FORMATS = "(*.jpg *.png)"
 
