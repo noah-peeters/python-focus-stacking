@@ -1,4 +1,4 @@
 opencv-contrib-python==4.5.1.48
 opencv-python==4.5.1.48
 numpy
-dask[complete]==2021.2.0
+dask[complete]==2021.3.0
