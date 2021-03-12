@@ -765,6 +765,8 @@ class Preferences(qtw.QDialog):
         index = self.theme_setting.findText(applied_theme)
         if index != -1:   # -1 is not found
             self.theme_setting.setCurrentIndex(index)
+        
+        self.close()    # Close preferences window
     
     # Set a color theme
     def set_color_theme(self, theme_name):
