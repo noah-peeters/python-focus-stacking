@@ -2,7 +2,6 @@ import PyQt5.QtGui as qtg
 from datetime import timedelta
 import ntpath
 import os
-import numpy as np
 import qimage2ndarray
 
 class Utilities:
