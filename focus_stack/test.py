@@ -82,7 +82,7 @@ def doLap(image):
                             # Generally, keeping these two values the same or very close works well
                             # Also, odd numbers, please...
 
-    blurred = cv2.GaussianBlur(image, (blur_size,blur_size), 0)
+    blurred = cv2.GaussianBlur(image, (blur_size, blur_size), 0)
     return cv2.Laplacian(blurred, cv2.CV_64F, ksize=kernel_size)
 
 #
@@ -101,15 +101,12 @@ def focus_stack(unimages):
 
     output = np.zeros(shape=images[0].shape, dtype=images[0].dtype)
 
-    count = 0
     for y in range(0,images[0].shape[0]):
         for x in range(0, images[0].shape[1]):
             yxlaps = abs(laps[:, y, x])
             index = (np.where(yxlaps == max(yxlaps)))[0][0]
             output[y,x] = images[index][y,x]
-            count += 1
 
-    print(count)
     return output
 
 file_name_pattern = '*.jpg'
@@ -120,5 +117,5 @@ for dir_name in ['images']:
 
     # Save image in a file, 'focus_stacked.png', in the same directory as the other images
     im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
-    cv2.imwrite(dir_name+'/focus_stacked.png',im)    
+    cv2.imwrite(dir_name + '/focus_stacked.png',im)
 print('FINISHED')

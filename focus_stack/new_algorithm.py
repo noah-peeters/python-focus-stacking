@@ -3,11 +3,12 @@ import numpy as np
 import os
 import glob
 import dask
+import time
 
-directory_name = "images"   # Directory to search in
-file_name_pattern = '*.jpg' # Extension of images to search for
-laplacian_kernel_size = 5   # SIze of laplacian kernel
-gaussian_blur_size = 5      # Size of gaussian blur
+directory_name = "images"    # Directory to search in
+file_name_pattern = '*.jpg'         # Extension of images to search for
+laplacian_kernel_size = 5           # SIze of laplacian kernel
+gaussian_blur_size = 5              # Size of gaussian blur
 
 # Extensions for memmap files
 rgb_memmap_extension = ".rgb"
@@ -17,10 +18,12 @@ laplacian_memmap_extension = ".laplacian"
 memmap_extensions = [rgb_memmap_extension, grayscale_memmap_extension, laplacian_memmap_extension]
 
 SHAPE = None
+start_time = time.time()
 
 # Load images (RGB and Grayscale) and write them to disk (seperately) parrallelized using Dask
 def load_images():
     print("Loading Images")
+    load_images_start_time = time.time()
     def load_single_image(image_path):
         print("Loading: " + image_path)
         global SHAPE
@@ -32,11 +35,11 @@ def load_images():
 
         # Write to disk (memmap)
         memmapped_rgb = np.memmap(image_path + rgb_memmap_extension, mode="w+", shape=SHAPE)
-        memmapped_rgb[:] = np.asarray(image_rgb)
+        memmapped_rgb[:] = image_rgb
         del memmapped_rgb
 
         memmapped_grayscale = np.memmap(image_path + grayscale_memmap_extension, mode="w+", shape=(SHAPE[0], SHAPE[1]))
-        memmapped_grayscale[:] = np.asarray(image_grayscale)
+        memmapped_grayscale[:] = image_grayscale
         del memmapped_grayscale
 
     # Load all images in parallel
@@ -47,10 +50,10 @@ def load_images():
         images.append(dask.delayed(load_single_image)(image_path))
 
     dask.compute(*images)
-
+    print(time.time() - load_images_start_time)
     return image_paths  # Return listing of images
 
-# Align images in parallel (to middle of stack)
+# Align images (to middle of stack)
 def align_images(image_paths):
     print("Aligning Images")
 
@@ -82,7 +85,7 @@ def align_images(image_paths):
 
         # Specify the threshold of the increment
         # in the correlation coefficient between two iterations
-        termination_eps = 1e-10
+        termination_eps = 1e-8
 
         # Define termination criteria
         criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, number_of_iterations,  termination_eps)
@@ -98,7 +101,7 @@ def align_images(image_paths):
             im2_aligned = cv2.warpAffine(im2_rgb, warp_matrix, (SHAPE[1], SHAPE[0]), flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
         
         # Overwrite RGB memmap of second image
-        im2_rgb[:] = np.asarray(im2_aligned)
+        im2_rgb[:] = im2_aligned
 
         del im1_gray
         del im2_gray
@@ -106,29 +109,29 @@ def align_images(image_paths):
 
     # Compute in parallel
     im0_path = image_paths[round(len(image_paths)/2)] # Middle image
-    aligning = []
+    #aligning = []
     for im_path in image_paths:
         if im_path != im0_path:
-            aligning.append(dask.delayed(align_single_image)(im0_path, im_path))
+            align_single_image(im0_path, im_path)
+            #aligning.append(dask.delayed(align_single_image)(im0_path, im_path))
     
-    dask.compute(*aligning)
+    #dask.compute(*aligning)
 
 # Calculate edges using laplacian filter, from grayscale
 def calculate_edges_laplacian(image_paths):
     def calculate_single_laplacian(image_path):
         global SHAPE
-        grayscale_image = np.memmap(image_path + grayscale_memmap_extension, mode="r+", shape=(SHAPE[0], SHAPE[1]))
+        grayscale_image = np.memmap(image_path + grayscale_memmap_extension, mode="r", shape=(SHAPE[0], SHAPE[1]))
+
         blurred = cv2.GaussianBlur(grayscale_image, (gaussian_blur_size, gaussian_blur_size), 0)
         laplacian = cv2.Laplacian(blurred, cv2.CV_64F, ksize=laplacian_kernel_size)
 
         # Write to disk
-        memmapped_laplacian = np.memmap(image_path + laplacian_memmap_extension, mode="w+", shape=(SHAPE[0], SHAPE[1]))
-        memmapped_laplacian[:] = np.asarray(laplacian)
-        print(np.array_equal(memmapped_laplacian, laplacian))
-        #print(memmapped_laplacian.shape, laplacian.shape)
+        memmapped_laplacian = np.memmap(image_path + laplacian_memmap_extension, mode="w+", shape=(SHAPE[0], SHAPE[1]), dtype="float64") # dtype="float64"!!
+        memmapped_laplacian[:] = laplacian
 
+        del grayscale_image
         del memmapped_laplacian
-
 
     # Compute in parallel
     laplacians = []
@@ -140,38 +143,50 @@ def calculate_edges_laplacian(image_paths):
 # Find points of highest focus and merge them into a new image
 def focus_stack(image_paths):
     print("Focus stacking...")
-
     images = []
     laplacians = []
-    for im_path in image_paths:
-        global SHAPE
-        images.append(np.memmap(im_path + rgb_memmap_extension, mode="r", shape=SHAPE))
-        laplacians.append(np.memmap(im_path + laplacian_memmap_extension, mode="r", shape=(SHAPE[0], SHAPE[1])))
-        
+    def load_images():
+        for im_path in image_paths:
+            global SHAPE
+            images.append(np.memmap(im_path + rgb_memmap_extension, mode="r", shape=SHAPE))
+            laplacians.append(np.memmap(im_path + laplacian_memmap_extension, mode="r", shape=(SHAPE[0], SHAPE[1]), dtype="float64"))
+    
+    # Load rgb images and laplacian edges in parallel
+    dask.compute(dask.delayed(load_images)())
+
     laplacians = np.asarray(laplacians)
+
     output = np.zeros(shape=images[0].shape, dtype=images[0].dtype)
 
-    for y in range(0, images[0].shape[0]):                  # Loop through vertical pixels (columns)
-        for x in range(0, images[0].shape[1]):              # Loop through horizontal pixels (rows)
-            yxlaps = abs(laplacians[:, y, x])               # Absolute value of laplacian at this pixel
-            index = (np.where(yxlaps == max(yxlaps)))[0][0]
-            output[y, x] = images[index][y, x]              # Write focus part to image
+    def calculate_pixels():
+        for y in range(0, images[0].shape[0]):                  # Loop through vertical pixels (columns)
+            for x in range(0, images[0].shape[1]):              # Loop through horizontal pixels (rows)
+                yxlaps = abs(laplacians[:, y, x])               # Absolute value of laplacian at this pixel
+                index = (np.where(yxlaps == max(yxlaps)))[0][0]
+                output[y, x] = images[index][y, x]              # Write focus pixel to output image
+    
+    # Calculate all pixels in parallel
+    dask.compute(dask.delayed(calculate_pixels)())
+    
     return output
 
-
 print('LOADING files in {}'.format(directory_name))
-image_paths = load_images()             # Write all images to memmap's
-align_images(image_paths)               # Align images
-calculate_edges_laplacian(image_paths)  # Calculate edges with a laplacian gradient 
+image_paths = load_images()                                         # Write all images to memmap's
+
+dask.compute(dask.delayed(align_images)(image_paths))               # Align images
+
+dask.compute(dask.delayed(calculate_edges_laplacian)(image_paths))  # Calculate edges with a laplacian gradient 
 im = focus_stack(image_paths)
 
 # Save image to disk
 im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
-cv2.imwrite(directory_name+'/focus_stacked.jpg', im) 
+cv2.imwrite(directory_name + "/focus_stacked.jpg", im) 
 
 # Cleanup memmapped (binary) files
 for im_path in image_paths:
     for ext in memmap_extensions:
-        os.remove(im_path + ext)
+        if os.path.exists(im_path + ext):
+            os.remove(im_path + ext)
 
 print("Stacking completed")
+print("--- After %s seconds ---" % (time.time() - start_time))
