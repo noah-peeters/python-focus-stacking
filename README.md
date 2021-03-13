@@ -5,11 +5,9 @@ Main resources used:
 
  - Image alignment and laplacian algorithm adapted from:
    [momonola/focus-stack](https://github.com/momonala/focus-stack) and
-   https://osf.io/j8kby/. Changes were needed for stacking larger images
+   https://osf.io/j8kby/. These implementations worked fine for small images, but every image had to be loaded into RAM-memory causing the program to crash. Solution was to use numpy memmaps.
    
- - Laplacian Pyramid algorithm adapted from:
-   https://github.com/sjawhar/focus-stacking
-
+ - Laplacian Pyramid algorithm adapted from: [enter link description here](https://github.com/sjawhar/focus-stacking)
 # Setup Conda in VSCode
 
 ## create conda virtual environment
@@ -55,6 +53,6 @@ sudo snap install ./pyqt-image-focus-stack*.snap --dangerous --devmode
 /snap/bin/pyqt-image-focus-stack
 ```
 <!--stackedit_data:
-eyJoaXN0b3J5IjpbLTI1MjA2MDk0MSwtNDI0NTM0NTM3LC0xOD
-k1NzQ5NTA2XX0=
+eyJoaXN0b3J5IjpbLTE0MzAwNzIyNDAsLTQyNDUzNDUzNywtMT
+g5NTc0OTUwNl19
 -->
