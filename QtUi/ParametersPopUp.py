@@ -63,7 +63,7 @@ class StackImagesPopUp(qtw.QDialog):
         # Gaussian blur size
         self.gaussian_blur_size_input = Slider(0, 40, 5)
         # laplacian kernel size
-        self.laplacian_kernel_size = Slider(1, 31, 5)
+        self.laplacian_kernel_size = Slider(1, 31, 3)
 
         apply_button = qtw.QPushButton()
         apply_button.setText("Apply")
