@@ -97,4 +97,3 @@ apps:
 
 architectures:
   - build-on: [amd64, arm64, armhf]
-    run-on: [amd64, arm64, armhf]
