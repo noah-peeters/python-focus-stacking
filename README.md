@@ -8,6 +8,10 @@ This script is an optimized rework of  https://github.com/momonala/focus-stack u
 # Setup Conda / VSCode
 ## create conda virtual environment
 - install miniconda: https://docs.conda.io/en/latest/miniconda.html
+- Add to path (Linux):
+```
+export PATH="/home/username/miniconda/bin:$PATH"
+```
 - create the virtual environment
 ```
 conda env create -f environment.yml
