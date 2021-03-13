@@ -10,7 +10,7 @@ This script is an optimized rework of  https://github.com/momonala/focus-stack u
 - install miniconda: https://docs.conda.io/en/latest/miniconda.html
 - Add to path (Linux):
 ```
-export PATH="/home/username/miniconda/bin:$PATH"
+export PATH="/home/username/miniconda3/bin:$PATH"
 ```
 - create the virtual environment
 ```
