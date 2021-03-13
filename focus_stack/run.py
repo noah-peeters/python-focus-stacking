@@ -6,7 +6,7 @@ import os
 from glob import glob
 from argparse import ArgumentParser
 
-import cv2
+# import cv2
 
 from .stack_images import FocusStacker
 
@@ -25,17 +25,21 @@ def secondsToStr(elapsed=None):
     else:
         return str(timedelta(seconds=elapsed))
 
+
 def endlog():
     end = time()
-    elapsed = end-start
-    logger.info("excution time: "+ secondsToStr(elapsed) + "s")
+    elapsed = end - start
+    logger.info("excution time: " + secondsToStr(elapsed) + "s")
+
 
 start = time()
 atexit.register(endlog)
 
 
 def main():
-    _parser = ArgumentParser(prog="Focus a stack of images using multiprocessing and memmory mapped .")
+    _parser = ArgumentParser(
+        prog="Focus a stack of images using multiprocessing and memmory mapped ."
+    )
     _parser.add_argument(
         "-i",
         "--input",
@@ -44,7 +48,11 @@ def main():
         type=str,
     )
     _parser.add_argument(
-        "-o", "--output", help="Name of output image.", required=True, type=str,
+        "-o",
+        "--output",
+        help="Name of output image.",
+        required=True,
+        type=str,
     )
     _parser.add_argument(
         "-g",
@@ -65,8 +73,7 @@ def main():
 
     args = _parser.parse_args()
     image_files = sum(
-        [glob(f"{args.input}/*.{ext}")
-         for ext in ["jpg", "png", "jpeg", "JPG"]], []
+        [glob(f"{args.input}/*.{ext}") for ext in ["jpg", "png", "jpeg", "JPG"]], []
     )
     logger.debug(f"Processing files {image_files}")
     stacker = FocusStacker(
@@ -78,6 +85,6 @@ def main():
         logger.info(f"overwriting image {args.output}")
     else:
         logger.info(f"writing image {args.output}")
-    
+
     stacked.save(args.output)
     stacked.show()

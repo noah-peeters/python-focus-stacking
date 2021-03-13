@@ -4,6 +4,7 @@
 import PyQt5.QtWidgets as qtw
 import PyQt5.QtCore as qtc
 
+
 class AlignImagesPopUp(qtw.QDialog):
     def __init__(self, func_to_run):
         super().__init__()
@@ -13,7 +14,9 @@ class AlignImagesPopUp(qtw.QDialog):
 
         # Warp mode combobox
         self.warp_mode_input = qtw.QComboBox()
-        self.warp_mode_input.insertItems(0, ["Translation", "Affine", "Euclidean", "Homography"])
+        self.warp_mode_input.insertItems(
+            0, ["Translation", "Affine", "Euclidean", "Homography"]
+        )
 
         # Number of iterations slider
         self.number_of_iterations_input = Slider(100, 15000, 5000)
@@ -30,7 +33,9 @@ class AlignImagesPopUp(qtw.QDialog):
 
         form_layout = qtw.QFormLayout()
         form_layout.addRow("Warp mode:", self.warp_mode_input)
-        form_layout.addRow("Number of iterations until termination:", self.number_of_iterations_input)
+        form_layout.addRow(
+            "Number of iterations until termination:", self.number_of_iterations_input
+        )
         form_layout.addRow("Termination epsilon:", self.termination_epsilon_input)
         form_layout.addRow("Gaussian blur size:", self.gaussian_blur_size_input)
         form_layout.addWidget(apply_button)
@@ -41,17 +46,24 @@ class AlignImagesPopUp(qtw.QDialog):
         val = self.gaussian_blur_size_input.slider.value()
         if val % 2 == 0 and val != 0:
             # Gaussian blur has even value --> show error message and retry
-            qtw.QMessageBox.critical(self, "Gaussian blur error", "Gaussian blur size must be an odd number (e.g.: 1, 3, 5 etc.)", qtw.QMessageBox.Ok)
+            qtw.QMessageBox.critical(
+                self,
+                "Gaussian blur error",
+                "Gaussian blur size must be an odd number (e.g.: 1, 3, 5 etc.)",
+                qtw.QMessageBox.Ok,
+            )
         else:
             # Gaussian blur has uneven value --> proceed to image alignment
-            self.func_to_run({
-                "WarpMode": self.warp_mode_input.currentText(),
-                "NumberOfIterations": self.number_of_iterations_input.slider.value(),
-                "TerminationEpsilon": self.termination_epsilon_input.slider.value(),
-                "GaussianBlur": self.gaussian_blur_size_input.slider.value(),
-            }, 
-            self
+            self.func_to_run(
+                {
+                    "WarpMode": self.warp_mode_input.currentText(),
+                    "NumberOfIterations": self.number_of_iterations_input.slider.value(),
+                    "TerminationEpsilon": self.termination_epsilon_input.slider.value(),
+                    "GaussianBlur": self.gaussian_blur_size_input.slider.value(),
+                },
+                self,
             )
+
 
 class StackImagesPopUp(qtw.QDialog):
     def __init__(self, func_to_run):
@@ -83,19 +95,32 @@ class StackImagesPopUp(qtw.QDialog):
         if gaussian_val % 2 == 0 and gaussian_val != 0:
             continue_bool = False
             # Gaussian blur has even value --> show error message and retry
-            qtw.QMessageBox.critical(self, "Gaussian blur error", "Gaussian blur size must be an odd number (e.g.: 1, 3, 5 etc.)", qtw.QMessageBox.Ok)
+            qtw.QMessageBox.critical(
+                self,
+                "Gaussian blur error",
+                "Gaussian blur size must be an odd number (e.g.: 1, 3, 5 etc.)",
+                qtw.QMessageBox.Ok,
+            )
         elif laplacian_val % 2 == 0:
             continue_bool = False
             # laplacian has even value --> show error message and retry
-            qtw.QMessageBox.critical(self, "Laplacian kernel size error", "Laplacian kernel size must be an odd number (e.g.: 1, 3, 5 etc.)", qtw.QMessageBox.Ok)
-
-        if continue_bool == True:
-            self.func_to_run({
-                "GaussianBlur": gaussian_val,
-                "LaplacianKernel": laplacian_val,
-            }, 
-            self
+            qtw.QMessageBox.critical(
+                self,
+                "Laplacian kernel size error",
+                "Laplacian kernel size must be an odd number (e.g.: 1, 3, 5 etc.)",
+                qtw.QMessageBox.Ok,
             )
+
+        if continue_bool:
+            self.func_to_run(
+                {
+                    "GaussianBlur": gaussian_val,
+                    "LaplacianKernel": laplacian_val,
+                },
+                self,
+            )
+
+
 class Slider(qtw.QWidget):
     def __init__(self, min_range, max_range, default_value):
         super().__init__()
