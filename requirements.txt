@@ -1,10 +1,8 @@
-opencv-contrib-python
 opencv-python
 numpy
-dask[complete]
 PyQt5
 Path
 DateTime
 qimage2ndarray
-pip
 setuptools
+pytest

@@ -1046,7 +1046,7 @@ def main():
     # window = MainWindow()
     MainWindow()
 
-    # Fore fusion style
+    # Force fusion style
     app.setStyle("Fusion")
 
     sys.exit(app.exec_())

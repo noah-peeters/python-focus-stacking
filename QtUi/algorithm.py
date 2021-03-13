@@ -2,9 +2,6 @@ import numpy as np
 import cv2
 import tempfile
 
-# import os
-
-
 class MainAlgorithm:
     def __init__(self):
         self.image_shape = []
@@ -70,19 +67,18 @@ class MainAlgorithm:
         elif mode == "Homography":
             warp_mode = cv2.MOTION_HOMOGRAPHY
 
-        # Define 2x3 or 3x3 matrices
+        # Define 2x3 or 3x3 warp matrix
         if warp_mode == cv2.MOTION_HOMOGRAPHY:
             warp_matrix = np.eye(3, 3, dtype=np.float32)
         else:
             warp_matrix = np.eye(2, 3, dtype=np.float32)
 
-        # Specify the number of iterations.
+        # Get number of iterations
         number_of_iterations = 5000
         if parameters["NumberOfIterations"]:
             number_of_iterations = parameters["NumberOfIterations"]
 
-        # Specify the threshold of the increment
-        # in the correlation coefficient between two iterations
+        # Get termination epsilon
         termination_eps = 1e-8
         if parameters["TerminationEpsilon"]:
             termination_eps = 1 * 10 ** (-parameters["TerminationEpsilon"])
@@ -99,7 +95,7 @@ class MainAlgorithm:
         if parameters["GaussianBlur"]:
             gaussian_blur_size = parameters["GaussianBlur"]
 
-        # Run the ECC algorithm. The results are stored in warp_matrix.
+        # Run the algorithm
         _, warp_matrix = cv2.findTransformECC(
             im1_gray,
             im2_gray,
