@@ -74,6 +74,7 @@ plugs:
     target: $SNAP/data-dir/sounds
     default-provider: gtk-common-themes
 
+# the  "extensions: [kde-neon]"" would simplify this yaml a LOT. Unfortunately, PyQt crashes on the "open file" dialog > we have to fallback to old config.
 apps:
   pyqt-image-focus-stack:
     environment:
