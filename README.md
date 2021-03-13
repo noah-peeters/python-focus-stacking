@@ -52,7 +52,3 @@ sudo snap install ./pyqt-image-focus-stack*.snap --dangerous --devmode
 ```
 /snap/bin/pyqt-image-focus-stack
 ```
-<!--stackedit_data:
-eyJoaXN0b3J5IjpbLTE0MzAwNzIyNDAsLTQyNDUzNDUzNywtMT
-g5NTc0OTUwNl19
--->
