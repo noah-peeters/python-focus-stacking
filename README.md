@@ -9,6 +9,8 @@ Adapted algorithms from:
 
  - Laplacian Pyramid algorithm adapted from: [enter link description here](https://github.com/sjawhar/focus-stacking)
 
+[Documentation page](https://noah-peeters.github.io/python-focus-stacking/)
+
 ---
 # Setup Conda in VSCode
 
