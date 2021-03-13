@@ -2,6 +2,7 @@ import numpy as np
 import cv2
 import tempfile
 
+
 class MainAlgorithm:
     def __init__(self):
         self.image_shape = []
