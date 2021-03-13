@@ -1,6 +1,7 @@
 # Focus Stacking
-A focus stacking application written in Python that provides image alignment (OpenCV) and several stacking algorithms. Everything being nicely contained inside a GUI (Graphical User Interface) written using (Py)Qt5, that is easy to use. Image alignment and laplacian algorithm adapted from: https://github.com/momonala/focus-stack and https://osf.io/j8kby/ Changes were needed for stacking larger images --> numpy's memmaps.
+A focus stacking application written in Python that provides image alignment (OpenCV) and several stacking algorithms. Everything being nicely contained inside a GUI (Graphical User Interface) written using (Py)Qt5, that is easy to use. 
 
+Image alignment and laplacian algorithm adapted from: https://github.com/momonala/focus-stack and https://osf.io/j8kby/ Changes were needed for stacking larger images --> numpy's memmaps.
 Laplacian Pyramid algorithm adapted from: https://github.com/sjawhar/focus-stacking
 
 
@@ -49,5 +50,5 @@ sudo snap install ./pyqt-image-focus-stack*.snap --dangerous --devmode
 /snap/bin/pyqt-image-focus-stack
 ```
 <!--stackedit_data:
-eyJoaXN0b3J5IjpbMTM4NjEzMzEwOF19
+eyJoaXN0b3J5IjpbLTE4OTU3NDk1MDZdfQ==
 -->
