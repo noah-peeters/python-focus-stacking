@@ -1,0 +1,12 @@
+[Desktop Entry]
+Encoding=UTF-8
+Name=PyQtImageFocusStack
+GenericName=Image Focus Stack
+Comment=Image Focus Stack GUI Software
+Exec=pyqt-image-focus-stack
+Icon=${SNAP}/meta/gui/pyqt-image-focus-stack.png
+Terminal=false
+Type=Application
+StartupNotify=false
+Categories=Application;Image
+Keywords=Image;
