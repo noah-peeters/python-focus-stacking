@@ -2,35 +2,17 @@ name: pyqt-image-focus-stack
 version: git
 summary: PyQt Image Focus Stacking Gui
 description: |
- An Image Focus Stacking GUI written in python3/ pyqt5 
+ An Image Focus Stacking GUI written in python3 / pyqt5 
+icon: snap/gui/pyqt-image-focus-stack.png
 
 grade: devel
 base: core18
 # for now: devmode go to strict later
 confinement: devmode
 
-apps:
-  pyqt-image-focus-stack:
-    command: desktop-launch $SNAP/bin/QtUi
-  #  extensions:
-  #    - kde-neon
-    plugs:
-      - opengl
-      - home
-      - desktop
-      - x11
-      - gsettings
-
 parts:
-  pyqt-image-focus-stack:
-    plugin: python
-    source: .
-    requirements: 
-      - requirements.txt
-
-  qt5:
+  desktop-qt5:
     source: https://github.com/ubuntu/snapcraft-desktop-helpers.git
-    source-depth: 1
     source-subdir: qt
     plugin: make
     make-parameters: ["FLAVOR=qt5"]
@@ -50,3 +32,65 @@ parts:
       - libqt5svg5 # for loading icon themes which are svg
       - try: [appmenu-qt5] # not available on core18
       - locales-all
+
+  pyqt-image-focus-stack:
+    plugin: python
+    source: .
+    requirements: 
+      - requirements.txt
+    stage-packages:
+      - xsel
+      - python3-pyqt5
+      - qt5-gtk-platformtheme
+      - qtwayland5 
+      - python3-pyqtgraph
+      - python3-numpy
+      - libqt53danimation5
+      - libqt53dcore5
+      - libqt53dextras5
+      - libqt53dinput5
+      - libqt53dlogic5
+      - libqt53dquick5
+      - libqt53dquickscene2d5
+      - libqt53drender5
+      - libspeechd2
+    after: [desktop-qt5]      
+
+
+plugs:
+  # Support for common GTK themes
+  # https://forum.snapcraft.io/t/how-to-use-the-system-gtk-theme-via-the-gtk-common-themes-snap/6235
+  gsettings:
+  gtk-3-themes:
+    interface: content
+    target: $SNAP/data-dir/themes
+    default-provider: gtk-common-themes
+  icon-themes:
+    interface: content
+    target: $SNAP/data-dir/icons
+    default-provider: gtk-common-themes
+  sound-themes:
+    interface: content
+    target: $SNAP/data-dir/sounds
+    default-provider: gtk-common-themes
+
+# the  "extensions: [kde-neon]"" would simplify this yaml a LOT. Unfortunately, PyQt crashes on the "open file" dialog > we have to fallback to old config.
+apps:
+  pyqt-image-focus-stack:
+    environment:
+      DISABLE_WAYLAND: 1
+      # Use GTK3 cursor theme, icon theme and open/save file dialogs.
+      QT_QPA_PLATFORMTHEME: gtk3
+    command: desktop-launch $SNAP/bin/QtUi
+    plugs:
+      - opengl
+      - home
+      - network
+      - network-bind
+      - network-control
+      - mount-observe
+      - desktop
+      - desktop-legacy
+      - x11
+      - unity7
+      - wayland
