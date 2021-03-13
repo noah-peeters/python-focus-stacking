@@ -5,4 +5,3 @@ dependencies:
   - pip
   - pip: # todo merge 2 files?
     - -r file:requirements.txt
-    - -r file:QtUi/requirements.txt

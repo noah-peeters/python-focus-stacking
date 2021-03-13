@@ -2,7 +2,8 @@
 
 This script is an optimized rework of  https://github.com/momonala/focus-stack using Dask and Memory mapped data for faster and more stable execution.
 
-# Setup
+
+# Setup Conda / VSCode
 ## create conda virtual environment
 - install miniconda: https://docs.conda.io/en/latest/miniconda.html
 - create the virtual environment
@@ -25,4 +26,22 @@ conda env update -f environment.yml
 ```
 conda activate image-stack
 ```
+# Build and Debug Snap Package Locally
+## build package:
+```
+snapcraft
+```
+or get a shell within the snap:
+```
+snapcraft --debug
+```
 
+## install the local snap
+```
+sudo snap install ./pyqt-image-focus-stack*.snap --dangerous --devmode
+```
+
+## run snap
+```
+sudo snap install ./pyqt-image-focus-stack*.snap --dangerous --devmode
+```

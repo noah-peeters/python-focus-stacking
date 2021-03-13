@@ -8,8 +8,8 @@ import PyQt5.QtGui as qtg
 import random
 import string
 
-import QThreadWorkers as QThreads
-import ParametersPopUp
+import QtUi.QThreadWorkers as QThreads
+import QtUi.ParametersPopUp as ParametersPopUp
 
 SUPPORTED_IMAGE_FORMATS = "(*.jpg *.png)"
 
@@ -20,10 +20,10 @@ class MainWindow(qtw.QMainWindow):
         """
             Imports
         """
-        from algorithm import MainAlgorithm
+        from QtUi.algorithm import MainAlgorithm
         self.Algorithm = MainAlgorithm()        # Init algorithm
 
-        from utilities import Utilities
+        from QtUi.utilities import Utilities
         self.Utilities = Utilities()            # Init utilities
 
         """
@@ -800,7 +800,7 @@ class Preferences(qtw.QDialog):
         elif theme_name == "Light theme":
             self.Application.setPalette(self.Application.style().standardPalette())
 
-if __name__ == "__main__":
+def main():
     app = qtw.QApplication(sys.argv)
     window = MainWindow()
     
@@ -808,3 +808,6 @@ if __name__ == "__main__":
     app.setStyle("Fusion")
 
     sys.exit(app.exec_())
+
+if __name__ == "__main__":
+    main()
