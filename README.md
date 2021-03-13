@@ -1,13 +1,15 @@
 # Focus Stacking
-A focus stacking application written in Python that provides image alignment (OpenCV) and several stacking algorithms. Everything being nicely contained inside a GUI (Graphical User Interface) written using (Py)Qt5, that is easy to use. 
+A focus stacking application written in Python that provides image alignment (OpenCV) and several stacking algorithms. Everything being nicely contained inside a GUI (Graphical User Interface) written using (Py)Qt5, that is easy to use.
 
-Main resources used:
+Adapted algorithms from:
 
  - Image alignment and laplacian algorithm adapted from:
    [momonola/focus-stack](https://github.com/momonala/focus-stack) and
    https://osf.io/j8kby/. These implementations worked fine for small images, but every image had to be loaded into RAM-memory causing the program to crash. Solution was to use numpy memmaps.
-   
+
  - Laplacian Pyramid algorithm adapted from: [enter link description here](https://github.com/sjawhar/focus-stacking)
+
+---
 # Setup Conda in VSCode
 
 ## create conda virtual environment
@@ -33,6 +35,7 @@ conda env update -f environment.yml
 ```
 conda activate image-stack
 ```
+---
 # Build and Debug Snap Package Locally
 ## build package:
 ```
