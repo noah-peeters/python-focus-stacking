@@ -78,3 +78,4 @@ Thumbs.db
 
 #ignore temp files used
 images/*.raw
+*.snap
