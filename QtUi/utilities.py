@@ -17,7 +17,7 @@ class Utilities:
     # Get file size in MB from path
     def get_file_size_MB(self, path):
         if os.path.exists(path):
-            size = os .path.getsize(path)
+            size = os.path.getsize(path)
             return size / 1e+6 # Bytes to MegaBytes
         return 0
     

@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 import tempfile
+import os
 
 class MainAlgorithm:
     def __init__(self):
@@ -138,17 +139,31 @@ class MainAlgorithm:
             rgb_images.append(np.memmap(self.useSource_or_Aligned()[im_path], mode="r", shape=self.image_shape))
             laplacian_images.append(np.memmap(self.laplacian_images_temp_files[im_path], mode="r", shape=(self.image_shape[0], self.image_shape[1]), dtype="float64"))
 
-        laplacian_images = np.asarray(laplacian_images)
-
         """
             Calculate output image
         """
-        output = np.zeros(shape=rgb_images[0].shape, dtype=rgb_images[0].dtype)
-        for y in range(0, rgb_images[0].shape[0]):             # Loop through vertical pixels (rows)
-            for x in range(0, rgb_images[0].shape[1]):         # Loop through horizontal pixels (columns)
-                yxlaps = abs(laplacian_images[:, y, x])        # Absolute value of laplacian at this pixel
-                index = (np.where(yxlaps == max(yxlaps)))[0][0]
-                output[y, x] = rgb_images[index][y, x]         # Write focus pixel to output image
+        
+        # Create memmap (same size as rgb input)
+        stacked_temp_file = tempfile.NamedTemporaryFile()
+        stacked_memmap = np.memmap(stacked_temp_file, mode="w+", shape=self.image_shape, dtype=rgb_images[0].dtype)
+
+        for y in range(rgb_images[0].shape[0]):     # Loop through vertical pixels (rows)
+            # Create holder for whole row
+            holder = np.zeros([1, stacked_memmap.shape[1], stacked_memmap.shape[2]], dtype=stacked_memmap.dtype)
+
+            for x in range(rgb_images[0].shape[1]):             # Loop through horizontal pixels (columns)
+                def get_abs():
+                    values = []
+                    for arr in laplacian_images:
+                        values.append(abs(arr[y, x]))    # Insert (absolute) values of this pixel for each image
+                    return np.asarray(values, dtype=np.uint8)
+
+                abs_val = get_abs() # Get absolute value of this pixel from every image
+                index = (np.where(abs_val == max(abs_val)))[0][0]   # Get image that has highest value for this pixel
+
+                holder[0, x] = rgb_images[index][y, x]  # Write pixel from "best image" to holder
+
+            stacked_memmap[y] = holder[0]  # Write entire focused row to output (holder has only one row)
             
             yield y # Send progress back to UI (every row)
 
@@ -158,10 +173,6 @@ class MainAlgorithm:
         del rgb_images
         del laplacian_images
 
-        # Write stacked image to memmap
-        stacked_temp_file = tempfile.NamedTemporaryFile()
-        stacked_memmap = np.memmap(stacked_temp_file, mode="w+", shape=self.image_shape)
-        stacked_memmap[:] = output
         self.stacked_image_temp_file = stacked_temp_file    # Store temp file
 
     # Export image to path
