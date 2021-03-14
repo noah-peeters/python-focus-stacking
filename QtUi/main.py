@@ -13,7 +13,6 @@ import QtUi.ParametersPopUp as ParametersPopUp
 
 SUPPORTED_IMAGE_FORMATS = "(*.jpg *.png)"
 
-
 class MainWindow(qtw.QMainWindow):
     current_directory = None
 
@@ -878,6 +877,7 @@ class ImageListWidget(qtw.QWidget):
         self.setLayout(layout)
 
 
+# Image viewer usinng QGraphicsView
 class ImageViewer(qtw.QGraphicsView):
     photoClicked = qtc.pyqtSignal(qtc.QPoint)
 

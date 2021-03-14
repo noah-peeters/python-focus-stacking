@@ -3,5 +3,5 @@ dependencies:
   - python>=3.7
   - anaconda
   - pip
-  - pip: # todo merge 2 files?
+  - pip:
     - -r file:requirements.txt

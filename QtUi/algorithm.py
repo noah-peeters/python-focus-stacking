@@ -218,7 +218,6 @@ class MainAlgorithm:
         """
             Calculate output image
         """
-
         # Create memmap (same size as rgb input)
         stacked_temp_file = tempfile.NamedTemporaryFile()
         stacked_memmap = np.memmap(
