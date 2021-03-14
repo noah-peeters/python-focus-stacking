@@ -71,6 +71,7 @@ class StackImagesPopUp(qtw.QDialog):
     def __init__(self, func_to_run):
         super().__init__()
         self.func_to_run = func_to_run
+
         self.setWindowTitle("Settings for image stacking")
         self.setWindowModality(qtc.Qt.ApplicationModal)
 
@@ -108,14 +109,11 @@ class StackImagesPopUp(qtw.QDialog):
             Laplacian pyramid stacking widget
         """
         self.pyramid_widget = qtw.QWidget()
-        # Gaussian blur size
-        blur = Slider(0, 25, 5)
-        # laplacian kernel size
-        laplacian_size = Slider(1, 31, 5)
+        # Pyramid minimum size
+        self.pyramid_min_size = Slider(0, 128, 32)
 
         layout2 = qtw.QFormLayout()
-        layout2.addRow("Test1:", blur)
-        layout2.addRow("Test2:", laplacian_size)
+        layout2.addRow("Pyramid minimum size:", self.pyramid_min_size)
 
         self.pyramid_widget.setLayout(layout2)
 
@@ -159,11 +157,19 @@ class StackImagesPopUp(qtw.QDialog):
 
             if continue_bool:
                 self.func_to_run(
-                    {"GaussianBlur": gaussian_val, "LaplacianKernel": laplacian_val,},
+                    "laplacian",
+                    {
+                        "GaussianBlur": gaussian_val,
+                        "LaplacianKernel": laplacian_val,
+                    },
                     self,
                 )
         elif data == "pyramid":
-            print()
+            self.func_to_run(
+                "pyramid",
+                {"MinLaplacianSize": self.pyramid_min_size.slider.value()},
+                self,
+            )
 
 
 class Slider(qtw.QWidget):

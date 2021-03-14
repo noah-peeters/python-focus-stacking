@@ -564,13 +564,20 @@ class PyramidAlgorithm:
 
         return fused
 
-    def fusePyramid(self, image_paths, min_size=32):
+    def fusePyramid(self, image_paths, parameters):
         images = []
         for path in image_paths:
-            images.append()
+            images.append(
+                np.memmap(
+                    self.Parent.rgb_images_temp_files[path],
+                    mode="r",
+                    shape=self.Parent.image_shape,
+                )
+            )
+        images = np.asarray(images)
 
         smallest_side = min(images[0].shape[:2])
-        depth = int(np.log2(smallest_side / min_size))
+        depth = int(np.log2(smallest_side / parameters["MinLaplacianSize"]))
         kernel_size = 5
 
         # Calculate gaussian pyramid
@@ -594,4 +601,17 @@ class PyramidAlgorithm:
                 expanded = expanded[: layer.shape[0], : layer.shape[1]]
             image = expanded + layer
 
-        return image
+        # Create memmap (same size as rgb input)
+        stacked_temp_file = tempfile.NamedTemporaryFile()
+        stacked_memmap = np.memmap(
+            stacked_temp_file,
+            mode="w+",
+            shape=self.Parent.image_shape,
+            dtype=images[0].dtype,
+        )
+
+        stacked_memmap[:] = image
+
+        self.Parent.stacked_image_temp_file = stacked_temp_file  # Store temp file
+
+        del stacked_memmap

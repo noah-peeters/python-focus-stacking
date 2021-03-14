@@ -23,9 +23,11 @@ class MainWindow(qtw.QMainWindow):
             Imports
         """
         from algorithm import ImageHandler
+
         self.ImageHandler = ImageHandler()
 
         from utilities import Utilities
+
         self.Utilities = Utilities()
 
         """
@@ -357,138 +359,158 @@ class MainWindow(qtw.QMainWindow):
         popup.exec_()
 
     def stackImages_Laplacian(self):
-        def proceedToStacking(parameters, popup):
+        def proceedToStacking(stacking_mode, parameters, popup):
             if not parameters:
                 return  # Some value was entered incorrectly, retry
 
             popup.close()  # Close parameters window
 
-            # Laplacians progress bar
-            laplacian_progress = self.create_progress_bar()
-            laplacian_progress.setWindowTitle(
-                "Calculating laplacians of "
-                + str(len(self.loaded_image_files))
-                + " images."
-            )
-            laplacian_progress.setLabelText(
-                "Preparing to calculate laplacian gradients of your images. This shouldn't take long. Please wait."
-            )
-
-            self.laplacian_calc = QThreads.CalculateLaplacians(
-                self.loaded_image_files, parameters, self.ImageHandler
-            )
-
-            counter = 0
-
-            def laplacian_progress_update(image_path):
-                nonlocal counter
-                laplacian_progress.setLabelText(
-                    "Just computed laplacian gradient for: "
-                    + self.Utilities.get_file_name(image_path)
-                )
-                counter += 1
-                laplacian_progress.setValue(counter)
-
-            def laplacian_finished(returned):
-                # Add gaussian blurred and laplacian images to processing list widget
-                blurred_widget = (
-                    self.main_layout.list_widget.gaussian_blurred_images_list
-                )
-                laplacian_widget = self.main_layout.list_widget.laplacian_images_list
-                self.main_layout.set_image_list(
-                    returned["image_table"], "gaussian", blurred_widget
-                )
-                self.main_layout.set_image_list(
-                    returned["image_table"], "laplacian", laplacian_widget
-                )
-
-                props = {}
-                props["progress_bar"] = laplacian_progress
-                # Success message
-                props["success_message"] = qtw.QMessageBox(self)
-                props["success_message"].setIcon(qtw.QMessageBox.Information)
-                props["success_message"].setWindowTitle(
-                    "Laplacian gradients calculation success!"
-                )
-                props["success_message"].setText(
-                    "Laplacian gradients have been calculated for "
+            # Start laplacian stacking
+            if stacking_mode == "laplacian":
+                # Laplacians progress bar
+                laplacian_progress = self.create_progress_bar()
+                laplacian_progress.setWindowTitle(
+                    "Calculating laplacians of "
                     + str(len(self.loaded_image_files))
                     + " images."
                 )
-                props["success_message"].setStandardButtons(qtw.QMessageBox.Ok)
-                self.result_message(returned, props)  # Display message about operation
-
-                """
-                    Start final stacking process
-                """
-                # Progress bar setup
-                stack_progress = qtw.QProgressDialog(
-                    "Loading... ",
-                    "Cancel",
-                    0,
-                    self.ImageHandler.getImageShape()[0],
-                    self,
-                )
-                stack_progress.setWindowModality(qtc.Qt.WindowModal)
-                stack_progress.setValue(0)
-                stack_progress.setWindowTitle(
-                    "Final stacking of image: "
-                    + str(self.ImageHandler.getImageShape()[0])
-                    + " rows tall, "
-                    + str(self.ImageHandler.getImageShape()[1])
-                    + " columns wide."
-                )
-                stack_progress.setLabelText(
-                    "Preparing to calculate the final focus stack of your images. This shouldn't take long. Please wait."
+                laplacian_progress.setLabelText(
+                    "Preparing to calculate laplacian gradients of your images. This shouldn't take long. Please wait."
                 )
 
-                self.final_stacking_thread = QThreads.FinalStacking(
-                    self.loaded_image_files, self.ImageHandler
+                self.laplacian_calc = QThreads.CalculateLaplacians(
+                    self.loaded_image_files, parameters, self.ImageHandler
                 )
 
-                def row_progress_update(current_row):
-                    stack_progress.setLabelText(
-                        "Just calculated row "
-                        + str(current_row)
-                        + " of "
-                        + str(self.ImageHandler.getImageShape()[0])
-                        + "."
+                counter = 0
+
+                def laplacian_progress_update(image_path):
+                    nonlocal counter
+                    laplacian_progress.setLabelText(
+                        "Just computed laplacian gradient for: "
+                        + self.Utilities.get_file_name(image_path)
                     )
-                    stack_progress.setValue(current_row)
+                    counter += 1
+                    laplacian_progress.setValue(counter)
 
-                def stack_finished(returned):
+                def laplacian_finished(returned):
+                    # Add gaussian blurred and laplacian images to processing list widget
+                    blurred_widget = (
+                        self.main_layout.list_widget.gaussian_blurred_images_list
+                    )
+                    laplacian_widget = (
+                        self.main_layout.list_widget.laplacian_images_list
+                    )
+                    self.main_layout.set_image_list(
+                        returned["image_table"], "gaussian", blurred_widget
+                    )
+                    self.main_layout.set_image_list(
+                        returned["image_table"], "laplacian", laplacian_widget
+                    )
+
+                    props = {}
+                    props["progress_bar"] = laplacian_progress
+                    # Success message
+                    props["success_message"] = qtw.QMessageBox(self)
+                    props["success_message"].setIcon(qtw.QMessageBox.Information)
+                    props["success_message"].setWindowTitle(
+                        "Laplacian gradients calculation success!"
+                    )
+                    props["success_message"].setText(
+                        "Laplacian gradients have been calculated for "
+                        + str(len(self.loaded_image_files))
+                        + " images."
+                    )
+                    props["success_message"].setStandardButtons(qtw.QMessageBox.Ok)
+                    self.result_message(
+                        returned, props
+                    )  # Display message about operation
+
+                    """
+                        Start final stacking process
+                    """
+                    # Progress bar setup
+                    stack_progress = qtw.QProgressDialog(
+                        "Loading... ",
+                        "Cancel",
+                        0,
+                        self.ImageHandler.getImageShape()[0],
+                        self,
+                    )
+                    stack_progress.setWindowModality(qtc.Qt.WindowModal)
+                    stack_progress.setValue(0)
+                    stack_progress.setWindowTitle(
+                        "Final stacking of image: "
+                        + str(self.ImageHandler.getImageShape()[0])
+                        + " rows tall, "
+                        + str(self.ImageHandler.getImageShape()[1])
+                        + " columns wide."
+                    )
+                    stack_progress.setLabelText(
+                        "Preparing to calculate the final focus stack of your images. This shouldn't take long. Please wait."
+                    )
+
+                    self.final_stacking_thread = QThreads.FinalStacking_Laplacian(
+                        self.loaded_image_files, self.ImageHandler
+                    )
+
+                    def row_progress_update(current_row):
+                        stack_progress.setLabelText(
+                            "Just calculated row "
+                            + str(current_row)
+                            + " of "
+                            + str(self.ImageHandler.getImageShape()[0])
+                            + "."
+                        )
+                        stack_progress.setValue(current_row)
+
+                    def stack_finished(returned):
+                        # Add stacked image to processing list widget
+                        stacked_widget = self.main_layout.list_widget.stacked_image_list
+                        self.main_layout.set_image_list(
+                            returned["image_table"], "stacked", stacked_widget
+                        )
+
+                        props = {}
+                        props["progress_bar"] = stack_progress
+                        # Success message
+                        props["success_message"] = qtw.QMessageBox(self)
+                        props["success_message"].setIcon(qtw.QMessageBox.Information)
+                        props["success_message"].setWindowTitle(
+                            "Final stack calculation success!"
+                        )
+                        props["success_message"].setText(
+                            "The final stack has successfully been calculated."
+                        )
+                        props["success_message"].setStandardButtons(qtw.QMessageBox.Ok)
+                        self.result_message(returned, props)
+
+                    self.final_stacking_thread.row_finished.connect(row_progress_update)
+                    self.final_stacking_thread.finished.connect(stack_finished)
+
+                    self.final_stacking_thread.start()
+                    stack_progress.exec_()
+
+                self.laplacian_calc.imageFinished.connect(laplacian_progress_update)
+                self.laplacian_calc.finished.connect(laplacian_finished)
+                laplacian_progress.canceled.connect(self.laplacian_calc.kill)
+
+                self.laplacian_calc.start()
+                laplacian_progress.exec_()
+            elif stacking_mode == "pyramid":
+                print("pyramid stacking")
+                self.pyramid_calc = QThreads.PyramidStacking(self.loaded_image_files, parameters, self.ImageHandler)
+
+                def pyramid_finished(returned):
                     # Add stacked image to processing list widget
                     stacked_widget = self.main_layout.list_widget.stacked_image_list
                     self.main_layout.set_image_list(
                         returned["image_table"], "stacked", stacked_widget
                     )
+                    print("Finished stacking")
 
-                    props = {}
-                    props["progress_bar"] = stack_progress
-                    # Success message
-                    props["success_message"] = qtw.QMessageBox(self)
-                    props["success_message"].setIcon(qtw.QMessageBox.Information)
-                    props["success_message"].setWindowTitle(
-                        "Final stack calculation success!"
-                    )
-                    props["success_message"].setText(
-                        "The final stack has successfully been calculated."
-                    )
-                    props["success_message"].setStandardButtons(qtw.QMessageBox.Ok)
-                    self.result_message(returned, props)
-
-                self.final_stacking_thread.row_finished.connect(row_progress_update)
-                self.final_stacking_thread.finished.connect(stack_finished)
-
-                self.final_stacking_thread.start()
-                stack_progress.exec_()
-
-            self.laplacian_calc.imageFinished.connect(laplacian_progress_update)
-            self.laplacian_calc.finished.connect(laplacian_finished)
-            laplacian_progress.canceled.connect(self.laplacian_calc.kill)
-
-            self.laplacian_calc.start()
-            laplacian_progress.exec_()
+                self.pyramid_calc.finished.connect(pyramid_finished)
+                self.pyramid_calc.start()
 
         popup = ParametersPopUp.StackImagesPopUp(proceedToStacking)
         popup.exec_()

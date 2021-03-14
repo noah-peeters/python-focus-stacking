@@ -123,7 +123,9 @@ class CalculateLaplacians(qtc.QThread):
         """
         laplacian_images = []  # Table for processed laplacians
         for image_path in self.files:
-            success = self.Algorithm.LaplacianPixelAlgorithm.computeLaplacianEdges(image_path, self.parameters)
+            success = self.Algorithm.LaplacianPixelAlgorithm.computeLaplacianEdges(
+                image_path, self.parameters
+            )
 
             if not success or self.is_killed:  # Operation failed or stopped from UI
                 break
@@ -153,7 +155,7 @@ class CalculateLaplacians(qtc.QThread):
 
 
 # Do final stacking on a separate thread
-class FinalStacking(qtc.QThread):
+class FinalStacking_Laplacian(qtc.QThread):
     row_finished = qtc.pyqtSignal(int)
     finished = qtc.pyqtSignal(dict)
 
@@ -171,7 +173,9 @@ class FinalStacking(qtc.QThread):
         """
         self.start_time = time.time()
         row_reference = 0
-        for current_row in self.Algorithm.LaplacianPixelAlgorithm.stackImages(self.files):
+        for current_row in self.Algorithm.LaplacianPixelAlgorithm.stackImages(
+            self.files
+        ):
             if (
                 type(current_row) != int or self.is_killed
             ):  # Operation failed or stopped from UI
@@ -198,6 +202,37 @@ class FinalStacking(qtc.QThread):
     def kill(self):
         self.is_killed = True
 
+class PyramidStacking(qtc.QThread):
+    finished = qtc.pyqtSignal(dict)
+
+    def __init__(self, files, parameters, algorithm):
+        super().__init__()
+        self.files = files
+        self.Parameters = parameters
+        self.Algorithm = algorithm
+        self.is_killed = False
+        self.stack_success = False
+        self.start_time = 0
+
+    def run(self):
+        """
+        Stack images using gaussian + laplacian pyramids.
+        """
+        self.start_time = time.time()
+        self.Algorithm.PyramidAlgorithm.fusePyramid(self.files, self.Parameters)
+
+        # Operation ended
+        self.finished.emit(
+            {
+                "image_table": [self.Algorithm.stacked_image_temp_file.name],
+                "execution_time": round(time.time() - self.start_time, 4),
+                "operation_success": self.stack_success,
+                "killed_by_user": self.is_killed,
+            }
+        )
+
+    def kill(self):
+        self.is_killed = True
 
 # (Down)scale images on a separate thread.
 class ScaleImages(qtc.QThread):
