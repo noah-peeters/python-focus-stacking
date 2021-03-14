@@ -13,6 +13,7 @@ import ParametersPopUp as ParametersPopUp
 
 SUPPORTED_IMAGE_FORMATS = "(*.jpg *.png)"
 
+
 class MainWindow(qtw.QMainWindow):
     current_directory = None
 
@@ -81,7 +82,7 @@ class MainWindow(qtw.QMainWindow):
             triggered=self.clear_loaded_images,
         )
         export_action = qtw.QAction(
-            "&Export image", self, shortcut="Ctrl+E", triggered=self.export_image
+            "&Export image", self, shortcut="Ctrl+E", triggered=self.exportImage
         )
         quit_action = qtw.QAction(
             "&Quit", self, shortcut="Ctrl+W", triggered=lambda: self.close()
@@ -98,7 +99,7 @@ class MainWindow(qtw.QMainWindow):
             "&Stack Images",
             self,
             shortcut="Ctrl+Shift+S",
-            triggered=self.stack_images,
+            triggered=self.stackImages_Laplacian,
             enabled=False,
         )
         self.align_and_stack_images_action = qtw.QAction(
@@ -357,7 +358,7 @@ class MainWindow(qtw.QMainWindow):
         popup = ParametersPopUp.AlignImagesPopUp(proceedToAlign)
         popup.exec_()
 
-    def stack_images(self):
+    def stackImages_Laplacian(self):
         def proceedToStacking(parameters, popup):
             if not parameters:
                 return  # Some value was entered incorrectly, retry
@@ -424,19 +425,15 @@ class MainWindow(qtw.QMainWindow):
                 """
                 # Progress bar setup
                 stack_progress = qtw.QProgressDialog(
-                    "Loading... ",
-                    "Cancel",
-                    0,
-                    self.Algorithm.get_image_shape()[0],
-                    self,
+                    "Loading... ", "Cancel", 0, self.Algorithm.getImageShape()[0], self,
                 )
                 stack_progress.setWindowModality(qtc.Qt.WindowModal)
                 stack_progress.setValue(0)
                 stack_progress.setWindowTitle(
                     "Final stacking of image: "
-                    + str(self.Algorithm.get_image_shape()[0])
+                    + str(self.Algorithm.getImageShape()[0])
                     + " rows tall, "
-                    + str(self.Algorithm.get_image_shape()[1])
+                    + str(self.Algorithm.getImageShape()[1])
                     + " columns wide."
                 )
                 stack_progress.setLabelText(
@@ -452,7 +449,7 @@ class MainWindow(qtw.QMainWindow):
                         "Just calculated row "
                         + str(current_row)
                         + " of "
-                        + str(self.Algorithm.get_image_shape()[0])
+                        + str(self.Algorithm.getImageShape()[0])
                         + "."
                     )
                     stack_progress.setValue(current_row)
@@ -494,7 +491,7 @@ class MainWindow(qtw.QMainWindow):
         popup = ParametersPopUp.StackImagesPopUp(proceedToStacking)
         popup.exec_()
 
-    def export_image(self):
+    def exportImage(self):
         dir = None
         if self.current_directory:
             dir = self.current_directory
@@ -509,7 +506,7 @@ class MainWindow(qtw.QMainWindow):
 
             self.current_directory = file_path
             # Export to path
-            success = self.Algorithm.export_image(file_path)
+            success = self.Algorithm.exportImage(file_path)
 
             if success:
                 # Display success message
@@ -530,7 +527,7 @@ class MainWindow(qtw.QMainWindow):
 
     def align_and_stack_images(self):
         self.align_images()
-        self.stack_images()
+        self.stackImages_Laplacian()
 
     def clear_loaded_images(self):
         # Display confirmation dialog

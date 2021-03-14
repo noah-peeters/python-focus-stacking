@@ -27,7 +27,7 @@ class LoadImages(qtc.QThread):
         start_time = time.time()
         image_table = []
         for image_path in self.files:
-            bool = self.Algorithm.load_image(image_path)
+            bool = self.Algorithm.loadImage(image_path)
 
             if not bool:  # Operation failed
                 break
@@ -74,7 +74,7 @@ class AlignImages(qtc.QThread):
             []
         )  # Table for processed images (to check if all have been loaded)
         for image_path in self.files:
-            image0, image1, success = self.Algorithm.align_image(
+            image0, image1, success = self.Algorithm.alignImage(
                 image0, image_path, self.parameters
             )
 
@@ -123,9 +123,7 @@ class CalculateLaplacians(qtc.QThread):
         """
         laplacian_images = []  # Table for processed laplacians
         for image_path in self.files:
-            success = self.Algorithm.compute_laplacian_image(
-                image_path, self.parameters
-            )
+            success = self.Algorithm.computeLaplacianEdges(image_path, self.parameters)
 
             if not success or self.is_killed:  # Operation failed or stopped from UI
                 break
@@ -173,7 +171,7 @@ class FinalStacking(qtc.QThread):
         """
         self.start_time = time.time()
         row_reference = 0
-        for current_row in self.Algorithm.stack_images(self.files):
+        for current_row in self.Algorithm.stackImages_Laplacian(self.files):
             if (
                 type(current_row) != int or self.is_killed
             ):  # Operation failed or stopped from UI
@@ -183,7 +181,7 @@ class FinalStacking(qtc.QThread):
             row_reference = current_row
 
         if (
-            row_reference == self.Algorithm.get_image_shape()[0]
+            row_reference == self.Algorithm.getImageShape()[0]
         ):  # have all rows been processed?
             self.stack_success = True
 

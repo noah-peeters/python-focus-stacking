@@ -21,9 +21,7 @@ logger.setLevel(logging.INFO)
 
 class FocusStacker(object):
     def __init__(
-        self,
-        laplacian_kernel_size: int = 5,
-        gaussian_blur_kernel_size: int = 5,
+        self, laplacian_kernel_size: int = 5, gaussian_blur_kernel_size: int = 5,
     ) -> None:
         """Focus stacking class.
         Args:
@@ -50,7 +48,7 @@ class FocusStacker(object):
             _image = ParallelCompute(
                 self._gaussian_blur_kernel_size, self._laplacian_kernel_size
             )
-            image_load.append(dask.delayed(_image.load_image)(img_fn))
+            image_load.append(dask.delayed(_image.loadImage)(img_fn))
 
         # Load all images in parallel
         dask.compute(*image_load)
@@ -61,7 +59,7 @@ class FocusStacker(object):
             if i != 0:
                 ParallelCompute(
                     self._gaussian_blur_kernel_size, self._laplacian_kernel_size
-                ).align_image(image_files[i - 1], img_fn)
+                ).alignImage(image_files[i - 1], img_fn)
 
     def _gaussian_blur_and_laplacian_images(self, image_files):
         logger.info("Gaussian blurring images, and calculating their laplacian edges.")
@@ -80,7 +78,7 @@ class FocusStacker(object):
         logger.info("Stacking images.")
         return ParallelCompute(
             self._gaussian_blur_kernel_size, self._laplacian_kernel_size
-        ).stack_images(image_files)
+        ).stackImages_Laplacian(image_files)
 
 
 class ParallelCompute(object):
@@ -103,7 +101,7 @@ class ParallelCompute(object):
         )
 
     # Read image and save to disk (memmap)
-    def load_image(self, img_path):
+    def loadImage(self, img_path):
         _raw_fn, _grayscale_fn, _, _ = self._temp_filenames(img_path)
         # RGB image
         image = cv2.imread(img_path)
@@ -129,7 +127,7 @@ class ParallelCompute(object):
         del memMappedGrayscale
 
     # Align an image to a source image
-    def align_image(self, src_img_path, img_to_align_path):
+    def alignImage(self, src_img_path, img_to_align_path):
         logger.info("Aligning " + img_to_align_path + " to: " + src_img_path)
 
         # Read previously aligned image
@@ -235,7 +233,7 @@ class ParallelCompute(object):
 
     # Stack images and cleanup temporary files
 
-    def stack_images(self, image_paths):
+    def stackImages_Laplacian(self, image_paths):
         # Get all RGB images and laplacian gradients
         rgb_images = []
         laplacian_gradients = []

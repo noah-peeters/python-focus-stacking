@@ -11,7 +11,7 @@ class MainAlgorithm:
         self.clearTempFiles()
 
     # Load a single image
-    def load_image(self, image_path):
+    def loadImage(self, image_path):
         # Load in memory using cv2
         image_bgr = cv2.imread(image_path)
         image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
@@ -40,7 +40,7 @@ class MainAlgorithm:
         return True  # Successfully loaded image to memmap
 
     # Align a single image
-    def align_image(self, im1_path, im2_path, parameters):
+    def alignImage(self, im1_path, im2_path, parameters):
         # Get memmap's
         im1_gray = np.memmap(
             self.grayscale_images_temp_files[im1_path],
@@ -49,7 +49,7 @@ class MainAlgorithm:
         )
         im2_gray = np.memmap(
             self.grayscale_images_temp_files[im2_path],
-            mode="r",
+            mode="r+",
             shape=(self.image_shape[0], self.image_shape[1]),
         )
         im2_rgb = np.memmap(
@@ -107,26 +107,44 @@ class MainAlgorithm:
             gaussian_blur_size,
         )
         del im1_gray
-        del im2_gray
 
-        if warp_mode == cv2.MOTION_HOMOGRAPHY:
-            # Use warpPerspective for Homography
+        if warp_mode == cv2.MOTION_HOMOGRAPHY:  # Use warpPerspective for Homography
+            # Align RGB
             im2_aligned = cv2.warpPerspective(
                 im2_rgb,
                 warp_matrix,
                 (self.image_shape[1], self.image_shape[0]),
                 flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP,
             )
-        else:
-            # Use warpAffine for Translation, Euclidean and Affine
+            # Align grayscale
+            im2_grayscale_aligned = cv2.warpPerspective(
+                im2_gray,
+                warp_matrix,
+                (self.image_shape[1], self.image_shape[0]),
+                flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP,
+            )
+            
+        else:   # Use warpAffine for Translation, Euclidean and Affine
+            # Align RGB
             im2_aligned = cv2.warpAffine(
                 im2_rgb,
                 warp_matrix,
                 (self.image_shape[1], self.image_shape[0]),
                 flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP,
             )
+            # Align grayscale
+            im2_grayscale_aligned = cv2.warpAffine(
+                im2_gray,
+                warp_matrix,
+                (self.image_shape[1], self.image_shape[0]),
+                flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP,
+            )
 
         del im2_rgb
+
+        # Write aligned grayscale image
+        im2_gray[:] = im2_grayscale_aligned
+        del im2_gray
 
         # Write aligned to new memmap (tempfile)
         temp_aligned_rgb = tempfile.NamedTemporaryFile()
@@ -139,7 +157,7 @@ class MainAlgorithm:
         return im1_path, im2_path, True  # Operation success
 
     # Compute the laplacian edges of an image
-    def compute_laplacian_image(self, image_path, parameters):
+    def computeLaplacianEdges(self, image_path, parameters):
         grayscale_image = np.memmap(
             self.grayscale_images_temp_files[image_path],
             mode="r",
@@ -191,7 +209,7 @@ class MainAlgorithm:
         return True
 
     # Calculate output image (final stacking)
-    def stack_images(self, image_paths):
+    def stackImages_Laplacian(self, image_paths):
         """
         Load rgb images and laplacian gradients
         Try using aligned RGB images (if there), or use source RGB images
@@ -270,7 +288,7 @@ class MainAlgorithm:
         self.stacked_image_temp_file = stacked_temp_file  # Store temp file
 
     # Export image to path
-    def export_image(self, path):
+    def exportImage(self, path):
         if self.stacked_image_temp_file:
             output = np.memmap(
                 self.stacked_image_temp_file, mode="r", shape=self.image_shape
@@ -282,7 +300,7 @@ class MainAlgorithm:
         else:
             return False  # No stacked image
 
-    def get_image_shape(self):
+    def getImageShape(self):
         return self.image_shape
 
     # Clear all temp file references (Python will garbage-collect tempfiles automatically once they aren't referenced)

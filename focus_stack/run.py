@@ -8,7 +8,7 @@ from argparse import ArgumentParser
 
 # import cv2
 
-from .stack_images import FocusStacker
+from .stackImages_Laplacian import FocusStacker
 
 import atexit
 from time import time, strftime, localtime
@@ -48,11 +48,7 @@ def main():
         type=str,
     )
     _parser.add_argument(
-        "-o",
-        "--output",
-        help="Name of output image.",
-        required=True,
-        type=str,
+        "-o", "--output", help="Name of output image.", required=True, type=str,
     )
     _parser.add_argument(
         "-g",
