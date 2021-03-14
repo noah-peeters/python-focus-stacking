@@ -123,7 +123,7 @@ class CalculateLaplacians(qtc.QThread):
         """
         laplacian_images = []  # Table for processed laplacians
         for image_path in self.files:
-            success = self.Algorithm.computeLaplacianEdges(image_path, self.parameters)
+            success = self.Algorithm.LaplacianPixelAlgorithm.computeLaplacianEdges(image_path, self.parameters)
 
             if not success or self.is_killed:  # Operation failed or stopped from UI
                 break
@@ -171,7 +171,7 @@ class FinalStacking(qtc.QThread):
         """
         self.start_time = time.time()
         row_reference = 0
-        for current_row in self.Algorithm.stackImages_Laplacian(self.files):
+        for current_row in self.Algorithm.LaplacianPixelAlgorithm.stackImages(self.files):
             if (
                 type(current_row) != int or self.is_killed
             ):  # Operation failed or stopped from UI
@@ -186,7 +186,6 @@ class FinalStacking(qtc.QThread):
             self.stack_success = True
 
         # Operation ended
-        print(self.Algorithm.stacked_image_temp_file.name)
         self.finished.emit(
             {
                 "image_table": [self.Algorithm.stacked_image_temp_file.name],

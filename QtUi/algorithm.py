@@ -3,15 +3,28 @@ import cv2
 import tempfile
 from scipy import ndimage
 
-class MainAlgorithm:
+
+class ImageHandler:
+    image_shape = []
+    # Tempfile setup
+    rgb_images_temp_files = {}
+    grayscale_images_temp_files = {}
+    aligned_images_temp_files = {}
+    gaussian_blurred_images_temp_files = {}
+    laplacian_images_temp_files = {}
+    stacked_image_temp_file = None
+
     def __init__(self):
-        self.image_shape = []
+        # Initialize algorithms
+        self.LaplacianPixelAlgorithm = LaplacianPixelAlgorithm(self)
+        self.PyramidAlgorithm = PyramidAlgorithm(self)
 
-        # Setup dictionaries for storing temporary matrices (loaded/processed images)
-        self.clearTempFiles()
-
-    # Load a single image
+    # Load an image
     def loadImage(self, image_path):
+        """
+        Load a single image (RGB and grayscale) using a memmap inside a tempfile.
+        Keep a reference to the tempfiles, so they don't get destroyed.
+        """
         # Load in memory using cv2
         image_bgr = cv2.imread(image_path)
         image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
@@ -156,12 +169,93 @@ class MainAlgorithm:
 
         return im1_path, im2_path, True  # Operation success
 
+    # Return image shape
+    def getImageShape(self):
+        return self.image_shape
+
+    # Export image to path
+    def exportImage(self, path):
+        if self.stacked_image_temp_file:
+            output = np.memmap(
+                self.stacked_image_temp_file, mode="r", shape=self.image_shape
+            )
+            rgb = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
+            cv2.imwrite(path, rgb)
+            del output
+            return True
+        else:
+            return False  # No stacked image
+
+    # Get image (using tempfile) from path to tempfile
+    def getImageFromPath(self, path, im_type):
+        # Get image from path
+        image = None
+        if im_type == "source":
+            image = self.rgb_images_temp_files[path]
+            return np.memmap(image, mode="r", shape=self.image_shape)
+        elif im_type == "aligned":
+            image = self.aligned_images_temp_files[path]
+            return np.memmap(image, mode="r", shape=self.image_shape)
+        elif im_type == "gaussian":
+            image = self.gaussian_blurred_images_temp_files[path]
+            return np.memmap(
+                image, mode="r", shape=(self.image_shape[0], self.image_shape[1])
+            )
+        elif im_type == "laplacian":
+            image = self.laplacian_images_temp_files[path]
+            return np.memmap(
+                image,
+                mode="r",
+                shape=(self.image_shape[0], self.image_shape[1]),
+                dtype="float64",
+            )
+        elif im_type == "stacked":
+            image = self.stacked_image_temp_file
+            return np.memmap(image, mode="r", shape=self.image_shape)
+
+    # Return aligned RGB images (if any) or return source RGB images
+    def useSource_or_Aligned(self):
+        if len(self.aligned_images_temp_files) > 0:
+            return self.aligned_images_temp_files  # Use aligned images
+        else:
+            return self.rgb_images_temp_files  # Use non-aligned source images
+
+    # Downscale an image
+    def downscaleImage(self, image, scale_percent):
+        new_dim = (
+            round(image.shape[1] * scale_percent / 100),
+            round(image.shape[0] * scale_percent / 100),
+        )  # New width and height
+        return cv2.resize(image, new_dim, interpolation=cv2.INTER_AREA)
+
+    # Clear all temp file references
+    def clearTempFiles(self):
+        """
+        Clear all temp file references (Python will garbage-collect tempfiles automatically once they aren't referenced)
+        """
+        self.rgb_images_temp_files = {}
+        self.grayscale_images_temp_files = {}
+        self.aligned_images_temp_files = {}
+        self.gaussian_blurred_images_temp_files = {}
+        self.laplacian_images_temp_files = {}
+        self.stacked_image_temp_file = None
+
+
+class LaplacianPixelAlgorithm:
+    """
+    Class that handles image stacking using a gaussian / laplacian pyramid.
+    Uses images from the "ImageHandler" class.
+    """
+
+    def __init__(self, parent):
+        self.Parent = parent
+
     # Compute the laplacian edges of an image
     def computeLaplacianEdges(self, image_path, parameters):
         grayscale_image = np.memmap(
-            self.grayscale_images_temp_files[image_path],
+            self.Parent.grayscale_images_temp_files[image_path],
             mode="r",
-            shape=(self.image_shape[0], self.image_shape[1]),
+            shape=(self.Parent.image_shape[0], self.Parent.image_shape[1]),
         )
 
         blurred = grayscale_image
@@ -183,11 +277,11 @@ class MainAlgorithm:
         memmapped_blur = np.memmap(
             temp_gaussian_blurred_file,
             mode="w+",
-            shape=(self.image_shape[0], self.image_shape[1]),
+            shape=(self.Parent.image_shape[0], self.Parent.image_shape[1]),
             dtype=blurred.dtype,
         )
         memmapped_blur[:] = blurred
-        self.gaussian_blurred_images_temp_files[
+        self.Parent.gaussian_blurred_images_temp_files[
             image_path
         ] = temp_gaussian_blurred_file  # Store temporary file
         del memmapped_blur
@@ -197,11 +291,11 @@ class MainAlgorithm:
         memmapped_laplacian = np.memmap(
             temp_laplacian_file,
             mode="w+",
-            shape=(self.image_shape[0], self.image_shape[1]),
+            shape=(self.Parent.image_shape[0], self.Parent.image_shape[1]),
             dtype=laplacian.dtype,
         )  # dtype="float64" !!
         memmapped_laplacian[:] = laplacian
-        self.laplacian_images_temp_files[
+        self.Parent.laplacian_images_temp_files[
             image_path
         ] = temp_laplacian_file  # Store temporary file
         del memmapped_laplacian
@@ -209,7 +303,7 @@ class MainAlgorithm:
         return True
 
     # Calculate output image (final stacking)
-    def stackImages_Laplacian(self, image_paths):
+    def stackImages(self, image_paths):
         """
         Load rgb images and laplacian gradients
         Try using aligned RGB images (if there), or use source RGB images
@@ -219,16 +313,16 @@ class MainAlgorithm:
         for im_path in image_paths:
             rgb_images.append(
                 np.memmap(
-                    self.useSource_or_Aligned()[im_path],
+                    self.Parent.useSource_or_Aligned()[im_path],
                     mode="r",
-                    shape=self.image_shape,
+                    shape=self.Parent.image_shape,
                 )
             )
             laplacian_images.append(
                 np.memmap(
-                    self.laplacian_images_temp_files[im_path],
+                    self.Parent.laplacian_images_temp_files[im_path],
                     mode="r",
-                    shape=(self.image_shape[0], self.image_shape[1]),
+                    shape=(self.Parent.image_shape[0], self.Parent.image_shape[1]),
                     dtype="float64",
                 )
             )
@@ -241,7 +335,7 @@ class MainAlgorithm:
         stacked_memmap = np.memmap(
             stacked_temp_file,
             mode="w+",
-            shape=self.image_shape,
+            shape=self.Parent.image_shape,
             dtype=rgb_images[0].dtype,
         )
 
@@ -285,78 +379,17 @@ class MainAlgorithm:
         del rgb_images
         del laplacian_images
 
-        self.stacked_image_temp_file = stacked_temp_file  # Store temp file
-
-    # Export image to path
-    def exportImage(self, path):
-        if self.stacked_image_temp_file:
-            output = np.memmap(
-                self.stacked_image_temp_file, mode="r", shape=self.image_shape
-            )
-            rgb = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
-            cv2.imwrite(path, rgb)
-            del output
-            return True
-        else:
-            return False  # No stacked image
-
-    def getImageShape(self):
-        return self.image_shape
-
-    # Clear all temp file references (Python will garbage-collect tempfiles automatically once they aren't referenced)
-    def clearTempFiles(self):
-        self.rgb_images_temp_files = {}
-        self.grayscale_images_temp_files = {}
-        self.aligned_images_temp_files = {}
-        self.gaussian_blurred_images_temp_files = {}
-        self.laplacian_images_temp_files = {}
-        self.stacked_image_temp_file = None
-
-    # Get image (using tempfile) from path to tempfile
-    def getImageFromPath(self, path, im_type):
-        # Get image from path
-        image = None
-        if im_type == "source":
-            image = self.rgb_images_temp_files[path]
-            return np.memmap(image, mode="r", shape=self.image_shape)
-        elif im_type == "aligned":
-            image = self.aligned_images_temp_files[path]
-            return np.memmap(image, mode="r", shape=self.image_shape)
-        elif im_type == "gaussian":
-            image = self.gaussian_blurred_images_temp_files[path]
-            return np.memmap(
-                image, mode="r", shape=(self.image_shape[0], self.image_shape[1])
-            )
-        elif im_type == "laplacian":
-            image = self.laplacian_images_temp_files[path]
-            return np.memmap(
-                image,
-                mode="r",
-                shape=(self.image_shape[0], self.image_shape[1]),
-                dtype="float64",
-            )
-        elif im_type == "stacked":
-            image = self.stacked_image_temp_file
-            return np.memmap(image, mode="r", shape=self.image_shape)
-
-    def downscaleImage(self, image, scale_percent):
-        new_dim = (
-            round(image.shape[1] * scale_percent / 100),
-            round(image.shape[0] * scale_percent / 100),
-        )  # New width and height
-        return cv2.resize(image, new_dim, interpolation=cv2.INTER_AREA)
-
-    # Return aligned RGB images (if any) or return source RGB images
-    def useSource_or_Aligned(self):
-        if len(self.aligned_images_temp_files) > 0:
-            return self.aligned_images_temp_files  # Use aligned images
-        else:
-            return self.rgb_images_temp_files  # Use non-aligned source images
+        self.Parent.stacked_image_temp_file = stacked_temp_file  # Store temp file
 
 
 class PyramidAlgorithm:
-    def __init__(self):
-        print()
+    """
+    Class that handles image stacking using a gaussian / laplacian pyramid.
+    Uses inherited images from the "ImageHandler" class.
+    """
+
+    def __init__(self, parent):
+        self.Parent = parent
 
     def generating_kernel(a):
         kernel = np.array([0.25 - a / 2.0, 0.25, a, 0.25, 0.25 - a / 2.0])
@@ -413,7 +446,7 @@ class PyramidAlgorithm:
             for layer in range(1, images.shape[0]):
                 pyramid[-1][layer] = self.reduce_layer(pyramid[-2][layer])
             levels = levels - 1
-        print(sys.getsizeof(pyramid))
+
         return pyramid
 
     def laplacian_pyramid(self, images, gaussian):
@@ -531,7 +564,11 @@ class PyramidAlgorithm:
 
         return fused
 
-    def get_pyramid_fusion(self, images, min_size=32):
+    def fusePyramid(self, image_paths, min_size=32):
+        images = []
+        for path in image_paths:
+            images.append()
+
         smallest_side = min(images[0].shape[:2])
         depth = int(np.log2(smallest_side / min_size))
         kernel_size = 5

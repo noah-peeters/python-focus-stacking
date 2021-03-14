@@ -22,13 +22,11 @@ class MainWindow(qtw.QMainWindow):
         """
             Imports
         """
-        from algorithm import MainAlgorithm
-
-        self.Algorithm = MainAlgorithm()  # Init algorithm
+        from algorithm import ImageHandler
+        self.ImageHandler = ImageHandler()
 
         from utilities import Utilities
-
-        self.Utilities = Utilities()  # Init utilities
+        self.Utilities = Utilities()
 
         """
             Self setup
@@ -256,7 +254,7 @@ class MainWindow(qtw.QMainWindow):
             # Update progress slider
             image_progress.setValue(counter)
 
-        loading = QThreads.LoadImages(self.loaded_image_files, self.Algorithm)
+        loading = QThreads.LoadImages(self.loaded_image_files, self.ImageHandler)
         loading.finishedImage.connect(update_progress)  # Update progress callback
 
         def finished_loading(returned):
@@ -322,7 +320,7 @@ class MainWindow(qtw.QMainWindow):
                 align_progress.setValue(counter)
 
             aligning = QThreads.AlignImages(
-                self.loaded_image_files, parameters, self.Algorithm
+                self.loaded_image_files, parameters, self.ImageHandler
             )
             aligning.finishedImage.connect(update_progress)
 
@@ -377,7 +375,7 @@ class MainWindow(qtw.QMainWindow):
             )
 
             self.laplacian_calc = QThreads.CalculateLaplacians(
-                self.loaded_image_files, parameters, self.Algorithm
+                self.loaded_image_files, parameters, self.ImageHandler
             )
 
             counter = 0
@@ -425,15 +423,19 @@ class MainWindow(qtw.QMainWindow):
                 """
                 # Progress bar setup
                 stack_progress = qtw.QProgressDialog(
-                    "Loading... ", "Cancel", 0, self.Algorithm.getImageShape()[0], self,
+                    "Loading... ",
+                    "Cancel",
+                    0,
+                    self.ImageHandler.getImageShape()[0],
+                    self,
                 )
                 stack_progress.setWindowModality(qtc.Qt.WindowModal)
                 stack_progress.setValue(0)
                 stack_progress.setWindowTitle(
                     "Final stacking of image: "
-                    + str(self.Algorithm.getImageShape()[0])
+                    + str(self.ImageHandler.getImageShape()[0])
                     + " rows tall, "
-                    + str(self.Algorithm.getImageShape()[1])
+                    + str(self.ImageHandler.getImageShape()[1])
                     + " columns wide."
                 )
                 stack_progress.setLabelText(
@@ -441,7 +443,7 @@ class MainWindow(qtw.QMainWindow):
                 )
 
                 self.final_stacking_thread = QThreads.FinalStacking(
-                    self.loaded_image_files, self.Algorithm
+                    self.loaded_image_files, self.ImageHandler
                 )
 
                 def row_progress_update(current_row):
@@ -449,7 +451,7 @@ class MainWindow(qtw.QMainWindow):
                         "Just calculated row "
                         + str(current_row)
                         + " of "
-                        + str(self.Algorithm.getImageShape()[0])
+                        + str(self.ImageHandler.getImageShape()[0])
                         + "."
                     )
                     stack_progress.setValue(current_row)
@@ -506,7 +508,7 @@ class MainWindow(qtw.QMainWindow):
 
             self.current_directory = file_path
             # Export to path
-            success = self.Algorithm.exportImage(file_path)
+            success = self.ImageHandler.exportImage(file_path)
 
             if success:
                 # Display success message
@@ -548,7 +550,7 @@ class MainWindow(qtw.QMainWindow):
                 "processing", False
             )  # Toggle image processing actions off (no images loaded)
             self.main_layout.image_preview.setImage(None)  # Remove image from preview
-            self.Algorithm.clearTempFiles()  # Clear all temp files
+            self.ImageHandler.clearTempFiles()  # Clear all temp files
 
     # Display result message after operation finished
     def result_message(self, returned_table, props):
@@ -649,7 +651,7 @@ class MainLayout(qtw.QWidget):
 
     def __init__(self, parent):
         super().__init__(parent)
-        self.Algorithm = parent.Algorithm
+        self.ImageHandler = parent.ImageHandler
         self.Utilities = parent.Utilities
 
         self.list_widget = ImageListWidget(self)
@@ -719,7 +721,7 @@ class MainLayout(qtw.QWidget):
 
             # Downscale images to 2% of original
             self.downscaling_list[orig_name] = QThreads.ScaleImages(
-                image_paths, 2, self.Algorithm, im_type
+                image_paths, 2, self.ImageHandler, im_type
             )
 
             # Setup icon for an image
@@ -760,18 +762,16 @@ class MainLayout(qtw.QWidget):
     # Update image of QGraphicsView
     def setLoadedImage(self, item, im_type):
         if len(self.image_paths) > 0:  # Check if images have been loaded
-            np_array = self.Algorithm.getImageFromPath(
+            np_array = self.ImageHandler.getImageFromPath(
                 item.data(qtc.Qt.UserRole), im_type
             )
             if np_array.any():
                 qPixMap = self.Utilities.numpyArrayToQPixMap(np_array)
                 if qPixMap:
-                    self.image_preview.setImage(
-                        qPixMap
-                    )  # Set image inside QGraphicsView
-                    self.toggle_actions(
-                        "image_preview", True
-                    )  # Enable Image preview menu
+                    # Set image inside QGraphicsView
+                    self.image_preview.setImage(qPixMap)
+                    # Enable Image preview menu
+                    self.toggle_actions("image_preview", True)
 
     # Set zoom reset on new image load of ImageViewer
     def setZoomReset(self, value):
