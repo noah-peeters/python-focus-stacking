@@ -16,7 +16,7 @@ setup(
     project_urls = {
         "Documentation page": "https://noah-peeters.github.io/python-focus-stacking/",
         "Github README": "https://github.com/noah-peeters/python-focus-stacking/blob/master/README.md",
-    }
+    },
     description="Tool to focus stack images using Memory mapped structures for better concurrency.",
     packages=setuptools.find_packages(where="QtUi"),
     package_dir={"": "QtUi"},

@@ -6,7 +6,7 @@
 import time
 import PyQt5.QtCore as qtc
 import collections
-from QtUi.utilities import Utilities
+from utilities import Utilities
 
 
 # Load images on separate thread
