@@ -507,7 +507,6 @@ class MainWindow(qtw.QMainWindow):
                     self.main_layout.set_image_list(
                         returned["image_table"], "stacked", stacked_widget
                     )
-                    print("Finished stacking")
 
                 self.pyramid_calc.finished.connect(pyramid_finished)
                 self.pyramid_calc.start()
