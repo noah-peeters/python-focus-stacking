@@ -591,7 +591,7 @@ class PyramidAlgorithm:
         pyramids = self.laplacian_pyramid(images, gaussian)
         print("Just calculated laplacian pyramid")
 
-        # Fuse laplacian pyramid
+        # Fuse pyramid
         kernel_size = 5
         fused = [self.get_fused_base(pyramids[-1], kernel_size)]
         for layer in range(len(pyramids) - 2, -1, -1):
