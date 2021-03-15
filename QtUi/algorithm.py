@@ -454,11 +454,11 @@ class PyramidAlgorithm:
 
     def laplacian_pyramid(self, images, gaussian):
         pyramid = [gaussian[-1]]
-        print(type(pyramid))
+        print(len(pyramid))
         for level in range(len(gaussian) - 1, 0, -1):
             gauss = gaussian[level - 1]
-            d = images[0].shape
-            pyramid.append(np.zeros((len(images), d[0], d[1], d[2]), dtype=gauss.dtype))
+            d = gauss[0].shape
+            pyramid.append(np.zeros((len(images), d[0], d[1], d[2]), dtype=gauss[0].dtype))
             
             for layer in range(len(images)):
                 gauss_layer = gauss[layer]
