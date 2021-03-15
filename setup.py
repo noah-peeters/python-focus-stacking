@@ -17,8 +17,8 @@ setup(
         "Documentation page": "https://noah-peeters.github.io/python-focus-stacking/",
         "Github README": "https://github.com/noah-peeters/python-focus-stacking/blob/master/README.md",
     },
-    packages=setuptools.find_packages(where="QtUi"),
-    package_dir={"": "QtUi"},
+    packages=setuptools.find_packages(where="focus_stack"),
+    package_dir={"": "focus_stack"},
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

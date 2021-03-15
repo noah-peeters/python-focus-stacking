@@ -1,4 +1,4 @@
-from QtUi.utilities import Utilities
+from focus_stack.utilities import Utilities
 import pytest
 
 
