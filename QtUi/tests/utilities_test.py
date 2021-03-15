@@ -1,4 +1,4 @@
-from ..utilities import Utilities
+from QtUi.utilities import Utilities
 import pytest
 
 
