@@ -341,8 +341,10 @@ class LaplacianPixelAlgorithm:
 
         for y in range(rgb_images[0].shape[0]):  # Loop through vertical pixels (rows)
             # Create holder for whole row
-            holder = np.zeros(
-                [1, stacked_memmap.shape[1], stacked_memmap.shape[2]],
+            holder = np.memmap(
+                tempfile.NamedTemporaryFile(),
+                mode="w+",
+                shape=[1, stacked_memmap.shape[1], stacked_memmap.shape[2]],
                 dtype=stacked_memmap.dtype,
             )
 
@@ -401,8 +403,11 @@ class PyramidAlgorithm:
             return convolution[::2, ::2]
 
         ch_layer = self.reduce_layer(layer[:, :, 0])
-        next_layer = np.zeros(
-            list(ch_layer.shape) + [layer.shape[2]], dtype=ch_layer.dtype
+        next_layer = np.memmap(
+            tempfile.NamedTemporaryFile(),
+            mode="w+",
+            shape=list(ch_layer.shape) + [layer.shape[2]],
+            dtype=ch_layer.dtype,
         )
         next_layer[:, :, 0] = ch_layer
 
@@ -413,16 +418,22 @@ class PyramidAlgorithm:
 
     def expand_layer(self, layer, kernel=generating_kernel(0.4)):
         if len(layer.shape) == 2:
-            expand = np.zeros(
-                (2 * layer.shape[0], 2 * layer.shape[1]), dtype=np.float64
+            expand = next_layer = np.memmap(
+                tempfile.NamedTemporaryFile(),
+                mode="w+",
+                shape=(2 * layer.shape[0], 2 * layer.shape[1]),
+                dtype=np.float64,
             )
             expand[::2, ::2] = layer
             convolution = self.convolve(expand, kernel)
             return 4.0 * convolution
 
         ch_layer = self.expand_layer(layer[:, :, 0])
-        next_layer = np.zeros(
-            list(ch_layer.shape) + [layer.shape[2]], dtype=ch_layer.dtype
+        next_layer = np.memmap(
+            tempfile.NamedTemporaryFile(),
+            mode="w+",
+            shape=list(ch_layer.shape) + [layer.shape[2]],
+            dtype=ch_layer.dtype,
         )
         next_layer[:, :, 0] = ch_layer
 
@@ -444,9 +455,16 @@ class PyramidAlgorithm:
             next_layer = self.reduce_layer(pyramid[-1][0])
             next_layer_size = [len(images)] + list(next_layer.shape)
 
-            pyramid.append(np.memmap(tempfile.NamedTemporaryFile(), mode="w+", shape=tuple(next_layer_size), dtype=next_layer.dtype))
+            pyramid.append(
+                np.memmap(
+                    tempfile.NamedTemporaryFile(),
+                    mode="w+",
+                    shape=tuple(next_layer_size),
+                    dtype=next_layer.dtype,
+                )
+            )
             pyramid[-1][0] = next_layer
-            
+
             for layer in range(1, len(images)):
                 pyramid[-1][layer] = self.reduce_layer(pyramid[-2][layer])
             levels -= 1
@@ -458,8 +476,15 @@ class PyramidAlgorithm:
         for level in range(len(gaussian) - 1, 0, -1):
             gauss = gaussian[level - 1]
             d = gauss[0].shape
-            pyramid.append(np.memmap(tempfile.NamedTemporaryFile(), mode="w+", shape=(len(images), d[0], d[1], d[2]), dtype=np.float64))
-            
+            pyramid.append(
+                np.memmap(
+                    tempfile.NamedTemporaryFile(),
+                    mode="w+",
+                    shape=(len(images), d[0], d[1], d[2]),
+                    dtype=np.float64,
+                )
+            )
+
             for layer in range(len(images)):
                 gauss_layer = gauss[layer]
                 expanded = self.expand_layer(gaussian[level][layer])
@@ -481,7 +506,9 @@ class PyramidAlgorithm:
 
     def get_probabilities(self, gray_image):
         levels, counts = np.unique(gray_image.astype(np.uint8), return_counts=True)
-        probabilities = np.zeros((256,), dtype=np.float64)
+        probabilities = np.memmap(
+            tempfile.NamedTemporaryFile(), mode="w+", shape=(256,), dtype=np.float64
+        )
         probabilities[levels] = counts.astype(np.float64) / counts.sum()
         return probabilities
 
@@ -495,7 +522,12 @@ class PyramidAlgorithm:
         padded_image = cv2.copyMakeBorder(
             image, pad_amount, pad_amount, pad_amount, pad_amount, cv2.BORDER_REFLECT101
         )
-        entropies = np.zeros(image.shape[:2], dtype=np.float64)
+        entropies = np.memmap(
+            tempfile.NamedTemporaryFile(),
+            mode="w+",
+            shape=image.shape[:2],
+            dtype=np.float64,
+        )
         offset = np.arange(-pad_amount, pad_amount + 1)
         for row in range(entropies.shape[0]):
             for column in range(entropies.shape[1]):
@@ -516,7 +548,12 @@ class PyramidAlgorithm:
         padded_image = cv2.copyMakeBorder(
             image, pad_amount, pad_amount, pad_amount, pad_amount, cv2.BORDER_REFLECT101
         )
-        deviations = np.zeros(image.shape[:2], dtype=np.float64)
+        deviations = np.memmap(
+            tempfile.NamedTemporaryFile(),
+            mode="w+",
+            shape=image.shape[:2],
+            dtype=np.float64,
+        )
         offset = np.arange(-pad_amount, pad_amount + 1)
         for row in range(deviations.shape[0]):
             for column in range(deviations.shape[1]):
@@ -530,7 +567,12 @@ class PyramidAlgorithm:
 
     def get_fused_base(self, images, kernel_size):
         layers = images.shape[0]
-        entropies = np.zeros(images.shape[:3], dtype=np.float64)
+        entropies = np.memmap(
+            tempfile.NamedTemporaryFile(),
+            mode="w+",
+            shape=images.shape[:3],
+            dtype=np.float64,
+        )
         deviations = np.copy(entropies)
         for layer in range(layers):
             gray_image = cv2.cvtColor(
@@ -541,7 +583,12 @@ class PyramidAlgorithm:
 
         best_e = np.argmax(entropies, axis=0)
         best_d = np.argmax(deviations, axis=0)
-        fused = np.zeros(images.shape[1:], dtype=np.float64)
+        fused = np.memmap(
+            tempfile.NamedTemporaryFile(),
+            mode="w+",
+            shape=images.shape[1:],
+            dtype=np.float64,
+        )
 
         for layer in range(layers):
             fused += np.where(best_e[:, :, np.newaxis] == layer, images[layer], 0)
@@ -554,7 +601,12 @@ class PyramidAlgorithm:
             return self.convolve(np.square(laplacian))
 
         layers = laplacians.shape[0]
-        region_energies = np.zeros(laplacians.shape[:3], dtype=np.float64)
+        region_energies = np.memmap(
+            tempfile.NamedTemporaryFile(),
+            mode="w+",
+            shape=laplacians.shape[:3],
+            dtype=np.float64,
+        )
 
         for layer in range(layers):
             gray_lap = cv2.cvtColor(
@@ -563,7 +615,12 @@ class PyramidAlgorithm:
             region_energies[layer] = region_energy(gray_lap)
 
         best_re = np.argmax(region_energies, axis=0)
-        fused = np.zeros(laplacians.shape[1:], dtype=laplacians.dtype)
+        fused = np.memmap(
+            tempfile.NamedTemporaryFile(),
+            mode="w+",
+            shape=laplacians.shape[1:],
+            dtype=laplacians.dtype,
+        )
 
         for layer in range(layers):
             fused += np.where(best_re[:, :, np.newaxis] == layer, laplacians[layer], 0)
@@ -608,7 +665,7 @@ class PyramidAlgorithm:
             if expanded.shape != layer.shape:
                 expanded = expanded[: layer.shape[0], : layer.shape[1]]
             image = expanded + layer
-        
+
         print("Just collapsed pyramid.")
 
         # Create memmap (same size as rgb input)
