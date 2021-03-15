@@ -442,7 +442,6 @@ class PyramidAlgorithm:
         print("Loaded pyramid")
 
         while levels > 0:
-            print(levels)
             next_layer = self.reduce_layer(pyramid[-1][0])
             next_layer_size = [len(images)] + list(next_layer.shape)
 
