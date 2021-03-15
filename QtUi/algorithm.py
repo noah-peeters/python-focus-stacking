@@ -457,7 +457,8 @@ class PyramidAlgorithm:
         for level in range(len(gaussian) - 1, 0, -1):
             gauss = gaussian[level - 1]
             pyramid.append(np.zeros(gauss.shape, dtype=gauss.dtype))
-            for layer in range(images.shape[0]):
+            
+            for layer in range(len(images)):
                 gauss_layer = gauss[layer]
                 expanded = self.expand_layer(gaussian[level][layer])
                 if expanded.shape != gauss_layer.shape:
