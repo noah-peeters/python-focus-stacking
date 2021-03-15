@@ -406,7 +406,7 @@ class PyramidAlgorithm:
         next_layer = np.memmap(
             tempfile.NamedTemporaryFile(),
             mode="w+",
-            shape=list(ch_layer.shape) + [layer.shape[2]],
+            shape=tuple(list(ch_layer.shape) + [layer.shape[2]]),
             dtype=ch_layer.dtype,
         )
         next_layer[:, :, 0] = ch_layer
@@ -432,7 +432,7 @@ class PyramidAlgorithm:
         next_layer = np.memmap(
             tempfile.NamedTemporaryFile(),
             mode="w+",
-            shape=list(ch_layer.shape) + [layer.shape[2]],
+            shape=tuple(list(ch_layer.shape) + [layer.shape[2]]),
             dtype=ch_layer.dtype,
         )
         next_layer[:, :, 0] = ch_layer
