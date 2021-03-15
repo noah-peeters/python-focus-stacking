@@ -8,8 +8,8 @@ import PyQt5.QtGui as qtg
 import random
 import string
 
-import QtUi.QThreadWorkers as QThreads
-import QtUi.ParametersPopUp as ParametersPopUp
+import QThreadWorkers as QThreads
+import ParametersPopUp as ParametersPopUp
 
 SUPPORTED_IMAGE_FORMATS = "(*.jpg *.png)"
 
@@ -22,11 +22,11 @@ class MainWindow(qtw.QMainWindow):
         """
             Imports
         """
-        from QtUi.algorithm import ImageHandler
+        from algorithm import ImageHandler
 
         self.ImageHandler = ImageHandler()
 
-        from QtUi.utilities import Utilities
+        from utilities import Utilities
 
         self.Utilities = Utilities()
 
