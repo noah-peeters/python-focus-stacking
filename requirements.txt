@@ -5,5 +5,4 @@ Path
 DateTime
 qimage2ndarray
 setuptools
-pytest
 scipy
