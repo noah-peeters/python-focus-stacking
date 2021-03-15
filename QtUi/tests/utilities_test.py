@@ -1,4 +1,4 @@
-from QtUi.utilities import Utilities
+from QtUi import utilities as Utilities
 import pytest
 
 def test_format_seconds():
