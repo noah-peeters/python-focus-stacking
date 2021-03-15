@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 import setuptools
 from setuptools import setup
+from pathlib import Path
 
 with open("README.md", "r") as f:
     long_description = f.read()
+
+project_dir = Path(__file__).parent
 
 setup(
     name="focus-stack-concurrent",
@@ -17,8 +20,9 @@ setup(
         "Documentation page": "https://noah-peeters.github.io/python-focus-stacking/",
         "Github README": "https://github.com/noah-peeters/python-focus-stacking/blob/master/README.md",
     },
-    packages=setuptools.find_packages(where="focus_stack"),
-    package_dir={"": "focus_stack"},
+    packages=setuptools.find_packages("src"),
+    install_requires=project_dir.joinpath("requirements.txt").read_text().split("\n"),
+    package_dir={"": "src"},
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

@@ -5,7 +5,7 @@ import os
 import qimage2ndarray
 
 
-class Utilities:
+class Utilities():
     # Correctly format seconds to HH:MM:SS
     def format_seconds(self, s):
         return str(timedelta(seconds=s))
