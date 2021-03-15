@@ -444,7 +444,6 @@ class PyramidAlgorithm:
             next_layer = self.reduce_layer(pyramid[-1][0])
             next_layer_size = [len(images)] + list(next_layer.shape)
 
-            print(type(next_layer_size))
             pyramid.append(np.memmap(tempfile.NamedTemporaryFile(), mode="w+", shape=tuple(next_layer_size), dtype=next_layer.dtype))
             pyramid[-1][0] = next_layer
             
@@ -459,7 +458,7 @@ class PyramidAlgorithm:
         for level in range(len(gaussian) - 1, 0, -1):
             gauss = gaussian[level - 1]
             d = gauss[0].shape
-            pyramid.append(np.zeros((len(images), d[0], d[1], d[2]), dtype=np.float64))
+            pyramid.append(np.memmap(tempfile.NamedTemporaryFile(), mode="w+", shape=(len(images), d[0], d[1], d[2]), dtype=np.float64))
             
             for layer in range(len(images)):
                 gauss_layer = gauss[layer]
