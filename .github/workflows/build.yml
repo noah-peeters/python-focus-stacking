@@ -3,6 +3,7 @@ name: Build and test [Python, 3.6, 3.7, 3.8, 3.9]
 on: [push]
 
 jobs:
+  # Build
   build:
     runs-on: ubuntu-latest
     strategy:
@@ -24,10 +25,9 @@ jobs:
       - name: Install and run linter [flake8]
         run: |
           pip install flake8
-          flake8 .
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
       
       - name: Install pytest and run unit tests
         run: |
           pip install pytest
           pytest
-      

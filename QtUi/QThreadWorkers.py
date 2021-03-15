@@ -202,6 +202,7 @@ class FinalStacking_Laplacian(qtc.QThread):
     def kill(self):
         self.is_killed = True
 
+
 class PyramidStacking(qtc.QThread):
     finished = qtc.pyqtSignal(dict)
 
@@ -233,6 +234,7 @@ class PyramidStacking(qtc.QThread):
 
     def kill(self):
         self.is_killed = True
+
 
 # (Down)scale images on a separate thread.
 class ScaleImages(qtc.QThread):
