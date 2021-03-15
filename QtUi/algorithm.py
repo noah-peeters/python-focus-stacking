@@ -439,16 +439,19 @@ class PyramidAlgorithm:
         for image in images:
             image = image.astype(np.float64, copy=False)
         pyramid = [images]
+        print("Loaded pyramid")
 
         while levels > 0:
+            print(levels)
             next_layer = self.reduce_layer(pyramid[-1][0])
             next_layer_size = [len(images)] + list(next_layer.shape)
-            pyramid.append(np.zeros(next_layer_size, dtype=next_layer.dtype))
+
+            pyramid.append(np.memmap(tempfile.NamedTemporaryFile(), mode="w+", shape=next_layer_size, dtype=next_layer.dtype))
             pyramid[-1][0] = next_layer
             
             for layer in range(1, len(images)):
                 pyramid[-1][layer] = self.reduce_layer(pyramid[-2][layer])
-            levels = levels - 1
+            levels -= 1
 
         return pyramid
 
@@ -579,24 +582,26 @@ class PyramidAlgorithm:
                     shape=self.Parent.image_shape,
                 )
             )
-        # images = np.asarray(images)
-
-        smallest_side = min(images[0].shape[:2])
-        depth = int(np.log2(smallest_side / parameters["MinLaplacianSize"]))
-        kernel_size = 5
 
         # Calculate gaussian pyramid
+        smallest_side = min(images[0].shape[:2])
+        depth = int(np.log2(smallest_side / parameters["MinLaplacianSize"]))
         gaussian = self.gaussian_pyramid(images, depth)
+        print("Just calculated gaussian pyramid.")
 
         # Calculate laplacian pyramid
         pyramids = self.laplacian_pyramid(images, gaussian)
+        print("Just calculated laplacian pyramid")
 
         # Fuse laplacian pyramid
+        kernel_size = 5
         fused = [self.get_fused_base(pyramids[-1], kernel_size)]
         for layer in range(len(pyramids) - 2, -1, -1):
             fused.append(self.get_fused_laplacian(pyramids[layer]))
 
         fused = fused[::-1]
+
+        print("Just fused pyramid.")
 
         # Collapse pyramid
         image = fused[-1]
@@ -605,6 +610,8 @@ class PyramidAlgorithm:
             if expanded.shape != layer.shape:
                 expanded = expanded[: layer.shape[0], : layer.shape[1]]
             image = expanded + layer
+        
+        print("Just collapsed pyramid.")
 
         # Create memmap (same size as rgb input)
         stacked_temp_file = tempfile.NamedTemporaryFile()
