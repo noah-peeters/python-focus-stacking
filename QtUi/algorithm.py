@@ -439,13 +439,13 @@ class PyramidAlgorithm:
         for image in images:
             image = image.astype(np.float64, copy=False)
         pyramid = [images]
-        print("Loaded pyramid")
 
         while levels > 0:
             next_layer = self.reduce_layer(pyramid[-1][0])
             next_layer_size = [len(images)] + list(next_layer.shape)
 
-            pyramid.append(np.memmap(tempfile.NamedTemporaryFile(), mode="w+", shape=next_layer_size, dtype=next_layer.dtype))
+            print(type(next_layer_size))
+            pyramid.append(np.memmap(tempfile.NamedTemporaryFile(), mode="w+", shape=tuple(next_layer_size), dtype=next_layer.dtype))
             pyramid[-1][0] = next_layer
             
             for layer in range(1, len(images)):
