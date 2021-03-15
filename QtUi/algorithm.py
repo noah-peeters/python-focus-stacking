@@ -436,11 +436,10 @@ class PyramidAlgorithm:
 
     def gaussian_pyramid(self, images, levels):
         pyramid = [images.astype(np.float64)]
-        num_images = images.shape[0]
 
         while levels > 0:
             next_layer = self.reduce_layer(pyramid[-1][0])
-            next_layer_size = [num_images] + list(next_layer.shape)
+            next_layer_size = [len(images)] + list(next_layer.shape)
             pyramid.append(np.zeros(next_layer_size, dtype=next_layer.dtype))
             pyramid[-1][0] = next_layer
             for layer in range(1, images.shape[0]):
@@ -574,7 +573,7 @@ class PyramidAlgorithm:
                     shape=self.Parent.image_shape,
                 )
             )
-        images = np.asarray(images)
+        # images = np.asarray(images)
 
         smallest_side = min(images[0].shape[:2])
         depth = int(np.log2(smallest_side / parameters["MinLaplacianSize"]))
