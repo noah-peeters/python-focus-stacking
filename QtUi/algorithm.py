@@ -438,7 +438,6 @@ class PyramidAlgorithm:
         # Convert images to float64
         for image in images:
             image = image.astype(np.float64, copy=False)
-            print(image.dtype)
         pyramid = [images]
 
         while levels > 0:
@@ -446,7 +445,8 @@ class PyramidAlgorithm:
             next_layer_size = [len(images)] + list(next_layer.shape)
             pyramid.append(np.zeros(next_layer_size, dtype=next_layer.dtype))
             pyramid[-1][0] = next_layer
-            for layer in range(1, images.shape[0]):
+            
+            for layer in range(1, len(images)):
                 pyramid[-1][layer] = self.reduce_layer(pyramid[-2][layer])
             levels = levels - 1
 
