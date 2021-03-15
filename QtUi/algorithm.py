@@ -435,7 +435,11 @@ class PyramidAlgorithm:
         return ndimage.convolve(image.astype(np.float64), kernel, mode="mirror")
 
     def gaussian_pyramid(self, images, levels):
-        pyramid = [images.astype(np.float64)]
+        # Convert images to float64
+        for image in images:
+            image = image.astype(np.float64, copy=False)
+            print(image.dtype)
+        pyramid = [images]
 
         while levels > 0:
             next_layer = self.reduce_layer(pyramid[-1][0])
