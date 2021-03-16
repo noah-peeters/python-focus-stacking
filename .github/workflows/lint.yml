@@ -1,4 +1,4 @@
-name: Run linters [black & flake8]
+name: Run linters [black, mypy & flake8]
 
 on: [push, pull_request]
 
@@ -17,7 +17,7 @@ jobs:
           python-version: 3.8
 
       - name: Install Python dependencies
-        run: pip install black flake8
+        run: pip install black flake8 mypy
 
       - name: Run linters
         uses: wearerequired/lint-action@v1
