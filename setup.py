@@ -16,7 +16,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/noah-peeters/python-focus-stacking",
-    project_urls = {
+    project_urls={
         "Documentation page": "https://noah-peeters.github.io/python-focus-stacking/",
         "Github README": "https://github.com/noah-peeters/python-focus-stacking/blob/master/README.md",
     },
