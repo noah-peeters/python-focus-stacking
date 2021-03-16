@@ -1,12 +1,13 @@
 {
   "version": "0.2.0",
+  "python": "${command:python.interpreterPath}",
   "configurations": [
     {
       "name": "Python: QtStackImages",
       "type": "python",
       "request": "launch",
-      "program": "focus_stack/main.py",
-      "console": "integratedTerminal"
+      "console": "integratedTerminal",
+      "module": "src.focus_stack.main"
     }
   ]
 }

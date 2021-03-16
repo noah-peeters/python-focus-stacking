@@ -8,8 +8,8 @@ import PyQt5.QtGui as qtg
 import random
 import string
 
-import QThreadWorkers as QThreads
-import ParametersPopUp as ParametersPopUp
+import src.focus_stack.QThreadWorkers as QThreads
+import src.focus_stack.ParametersPopUp as ParametersPopUp
 
 SUPPORTED_IMAGE_FORMATS = "(*.jpg *.png)"
 
@@ -22,11 +22,11 @@ class MainWindow(qtw.QMainWindow):
         """
             Imports
         """
-        from algorithm import ImageHandler
+        from src.focus_stack.algorithm import ImageHandler
 
         self.ImageHandler = ImageHandler()
 
-        from utilities import Utilities
+        from src.focus_stack.utilities import Utilities
 
         self.Utilities = Utilities()
 
