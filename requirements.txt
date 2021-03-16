@@ -6,3 +6,4 @@ DateTime
 qimage2ndarray
 setuptools
 scipy
+psutil

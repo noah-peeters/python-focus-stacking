@@ -2,7 +2,11 @@ import numpy as np
 import cv2
 import tempfile
 from scipy import ndimage
+import logging
 
+from src.focus_stack.utilities import Utilities
+
+log = logging.getLogger(__name__)
 
 class ImageHandler:
     image_shape = []
@@ -249,6 +253,7 @@ class LaplacianPixelAlgorithm:
 
     def __init__(self, parent):
         self.Parent = parent
+        log.info("Initialized Laplacian pixel algorithm.")
 
     # Compute the laplacian edges of an image
     def computeLaplacianEdges(self, image_path, parameters):
@@ -392,6 +397,7 @@ class PyramidAlgorithm:
 
     def __init__(self, parent):
         self.Parent = parent
+        log.info("Initialized gaussian/laplacian pyramid algorithm.")
 
     def generating_kernel(a):
         kernel = np.array([0.25 - a / 2.0, 0.25, a, 0.25, 0.25 - a / 2.0])
@@ -628,6 +634,7 @@ class PyramidAlgorithm:
         return fused
 
     def fusePyramid(self, image_paths, parameters):
+        log.info("Start laplacian pyramid stacking.")
         images = []
         for path in image_paths:
             images.append(
@@ -637,16 +644,24 @@ class PyramidAlgorithm:
                     shape=self.Parent.image_shape,
                 )
             )
+        
+        log.info("Just loaded {} images.".format(len(image_paths)))
+        log.info("Memory is now: {} MB".format(round(Utilities().python_memory_usage()), 2))
 
         # Calculate gaussian pyramid
         smallest_side = min(images[0].shape[:2])
         depth = int(np.log2(smallest_side / parameters["MinLaplacianSize"]))
         gaussian = self.gaussian_pyramid(images, depth)
-        print("Just calculated gaussian pyramid.")
+    
+        log.info("Just calculated gaussian pyramid.")
+        log.info("Memory is now: {} MB".format(round(Utilities().python_memory_usage()), 2))
 
         # Calculate laplacian pyramid
         pyramids = self.laplacian_pyramid(images, gaussian)
         print("Just calculated laplacian pyramid")
+
+        log.info("Just calculated laplacian pyramid.")
+        log.info("Memory is now: {} MB".format(round(Utilities().python_memory_usage()), 2))
 
         # Fuse pyramid
         kernel_size = 5
@@ -656,7 +671,8 @@ class PyramidAlgorithm:
 
         fused = fused[::-1]
 
-        print("Just fused pyramid.")
+        log.info("Just fused pyramid.")
+        log.info("Memory is now: {} MB".format(round(Utilities().python_memory_usage()), 2))
 
         # Collapse pyramid
         image = fused[-1]
@@ -666,7 +682,8 @@ class PyramidAlgorithm:
                 expanded = expanded[: layer.shape[0], : layer.shape[1]]
             image = expanded + layer
 
-        print("Just collapsed pyramid.")
+        log.info("Just collapsed pyramid.")
+        log.info("Memory is now: {} MB".format(round(Utilities().python_memory_usage()), 2))
 
         # Create memmap (same size as rgb input)
         stacked_temp_file = tempfile.NamedTemporaryFile()
@@ -678,6 +695,9 @@ class PyramidAlgorithm:
         )
 
         stacked_memmap[:] = image
+
+        log.info("Successfully created stacked image.")
+        log.info("Memory is now: {} MB".format(round(Utilities().python_memory_usage()), 2))
 
         self.Parent.stacked_image_temp_file = stacked_temp_file  # Store temp file
 

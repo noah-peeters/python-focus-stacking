@@ -7,6 +7,27 @@ import PyQt5.QtCore as qtc
 import PyQt5.QtGui as qtg
 import random
 import string
+import logging
+
+# Setup logging
+class OneLineExceptionFormatter(logging.Formatter):
+    def formatException(self, exc_info):
+        result = super().formatException(exc_info)
+        return repr(result)
+
+    def format(self, record):
+        result = super().format(record)
+        if record.exc_text:
+            result = result.replace("\n", "")
+        return result
+
+
+handler = logging.StreamHandler()
+formatter = OneLineExceptionFormatter(logging.BASIC_FORMAT)
+handler.setFormatter(formatter)
+root = logging.getLogger()
+root.setLevel(os.environ.get("LOGLEVEL", "DEBUG"))
+root.addHandler(handler)
 
 import src.focus_stack.QThreadWorkers as QThreads
 import src.focus_stack.ParametersPopUp as ParametersPopUp
@@ -256,8 +277,8 @@ class MainWindow(qtw.QMainWindow):
             # Update progress slider
             image_progress.setValue(counter)
 
-        loading = QThreads.LoadImages(self.loaded_image_files, self.ImageHandler)
-        loading.finishedImage.connect(update_progress)  # Update progress callback
+        self.loading = QThreads.LoadImages(self.loaded_image_files, self.ImageHandler)
+        self.loading.finishedImage.connect(update_progress)  # Update progress callback
 
         def finished_loading(returned):
             self.loaded_image_files = returned["image_table"]  # Set loaded images
@@ -281,10 +302,12 @@ class MainWindow(qtw.QMainWindow):
             props["success_message"].setStandardButtons(qtw.QMessageBox.Ok)
             self.result_message(returned, props)  # Display message about operation
 
-        loading.finished.connect(finished_loading)  # Connection on finished
+        self.loading.finished.connect(finished_loading)  # Connection on finished
 
-        image_progress.canceled.connect(loading.kill)  # Stop image loading on cancel
-        loading.start()
+        image_progress.canceled.connect(
+            self.loading.kill
+        )  # Stop image loading on cancel
+        self.loading.start()
 
         image_progress.exec_()
 
@@ -321,10 +344,10 @@ class MainWindow(qtw.QMainWindow):
                 # Update progress slider
                 align_progress.setValue(counter)
 
-            aligning = QThreads.AlignImages(
+            self.aligning = QThreads.AlignImages(
                 self.loaded_image_files, parameters, self.ImageHandler
             )
-            aligning.finishedImage.connect(update_progress)
+            self.aligning.finishedImage.connect(update_progress)
 
             def finished_loading(returned):
                 # Add aligned images to processing list widget
@@ -346,12 +369,12 @@ class MainWindow(qtw.QMainWindow):
                 props["success_message"].setStandardButtons(qtw.QMessageBox.Ok)
                 self.result_message(returned, props)
 
-            aligning.finished.connect(finished_loading)
+            self.aligning.finished.connect(finished_loading)
             align_progress.canceled.connect(
-                aligning.kill
+                self.aligning.kill
             )  # Kill operation on "cancel" press
 
-            aligning.start()
+            self.aligning.start()
             align_progress.exec_()
 
         # Settings popup for image alignment
@@ -498,7 +521,6 @@ class MainWindow(qtw.QMainWindow):
                 self.laplacian_calc.start()
                 laplacian_progress.exec_()
             elif stacking_mode == "pyramid":
-                print("pyramid stacking")
                 self.pyramid_calc = QThreads.PyramidStacking(
                     self.loaded_image_files, parameters, self.ImageHandler
                 )

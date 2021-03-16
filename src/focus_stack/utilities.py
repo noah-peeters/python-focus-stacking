@@ -3,6 +3,7 @@ from datetime import timedelta
 import ntpath
 import os
 import qimage2ndarray
+import psutil
 
 
 class Utilities:
@@ -21,6 +22,12 @@ class Utilities:
             size = os.path.getsize(path)
             return size / 1e6  # Bytes to MegaBytes
         return 0
+    
+    # Return memory usage of python in MB
+    def python_memory_usage(self):
+        process = psutil.Process(os.getpid())
+        mem = process.memory_info()[0] / float(2 ** 20)
+        return mem
 
     # Convert numpy array image to QPixmap
     def numpyArrayToQPixMap(self, array):
