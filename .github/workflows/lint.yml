@@ -1,4 +1,4 @@
-name: Lint
+name: Run linters [black & flake8]
 
 on: [push, pull_request]
 
@@ -22,6 +22,7 @@ jobs:
       - name: Run linters
         uses: wearerequired/lint-action@v1
         with:
+          github_token: ${{ secrets.github_token }}
           auto_fix: true
           black: true
           flake8: true
