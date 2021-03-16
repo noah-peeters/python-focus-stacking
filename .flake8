@@ -1,5 +1,5 @@
 [flake8]
-ignore = F405,E203,W503
+ignore = F405,E203,W503,F403
 max-line-length = 160
 exclude = tests/* build/* *_test.py
 max-complexity = 10
