@@ -499,7 +499,9 @@ class MainWindow(qtw.QMainWindow):
                 laplacian_progress.exec_()
             elif stacking_mode == "pyramid":
                 print("pyramid stacking")
-                self.pyramid_calc = QThreads.PyramidStacking(self.loaded_image_files, parameters, self.ImageHandler)
+                self.pyramid_calc = QThreads.PyramidStacking(
+                    self.loaded_image_files, parameters, self.ImageHandler
+                )
 
                 def pyramid_finished(returned):
                     # Add stacked image to processing list widget
