@@ -10,6 +10,7 @@ from src.focus_stack.utilities import Utilities
 # Setup log
 log = logging.getLogger(__name__)
 
+
 @ray.remote
 class ImageHandler:
     image_shape = []

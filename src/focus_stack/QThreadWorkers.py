@@ -26,14 +26,14 @@ class LoadImages(qtc.QThread):
 
     def update_ui(self, path):
         self.image_table.append(path)  # Append loaded image to table
-        self.finishedImage.emit(path)   # Send finished path back to UI
+        self.finishedImage.emit(path)  # Send finished path back to UI
 
     def run(self):
         start_time = time.time()
         self.image_table = self.files
         futures = [self.Algorithm.loadImage.remote(path) for path in self.files]
         ray.get(futures)
-        
+
         # Operation ended
         self.finished.emit(
             {
@@ -245,7 +245,9 @@ class ScaleImages(qtc.QThread):
 
     def run(self):
         for path in self.image_paths:
-            np_array = self.Algorithm.getImageFromPath.remote(path, self.im_type)  # Get image
+            np_array = self.Algorithm.getImageFromPath.remote(
+                path, self.im_type
+            )  # Get image
             np_array = ray.get(np_array)
             if np_array.any():
                 # Downscale image to scale_factor (percentage) of original
@@ -253,7 +255,7 @@ class ScaleImages(qtc.QThread):
                     np_array, self.scale_factor
                 )
                 scaled = ray.get(scaled)
-                
+
                 self.finishedImage.emit(
                     [path, self.Utilities.numpyArrayToQPixMap(scaled)]
                 )  # Convert image to QPixmap
