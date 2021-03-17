@@ -66,7 +66,7 @@ class ImageHandler:
             return
         elif not "image_shape" in self.image_storage[im2_path]:
             return
-        
+
         # Shorthands
         im2_storage = self.image_storage[im2_path]
         shape = im2_storage["image_shape"]
@@ -172,6 +172,8 @@ class ImageHandler:
             shape=shape,
         )
         im2_storage["rgb_aligned"][:] = im2_aligned
+
+        log.info("Successfully aligned %s to %s".format(im1_path, im2_path))
 
         return im1_path, im2_path, True  # Operation success
 
