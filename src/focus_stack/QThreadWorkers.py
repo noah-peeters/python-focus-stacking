@@ -32,12 +32,17 @@ class LoadImages(qtc.QThread):
     def run(self):
         # Clear loaded images
         self.ImageHandler.image_storage = {}
-        
+
         start_time = time.time()
-        
+
         # Start image loading in parallel
-        ray.get([self.ImageHandler.loadImage.remote(self.ImageHandler, path) for path in self.files])
-        
+        ray.get(
+            [
+                self.ImageHandler.loadImage.remote(self.ImageHandler, path)
+                for path in self.files
+            ]
+        )
+
         self.finished.emit(
             {
                 "execution_time": round(time.time() - start_time, 4),
