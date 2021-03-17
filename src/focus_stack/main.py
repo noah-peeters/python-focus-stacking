@@ -290,7 +290,6 @@ class MainWindow(qtw.QMainWindow):
             # Update listing of loaded images
             self.main_layout.set_image_list(
                 self.loaded_image_files,
-                "source",
                 self.main_layout.list_widget.loaded_images_list,
             )
 
@@ -357,9 +356,7 @@ class MainWindow(qtw.QMainWindow):
             def finished_loading(returned):
                 # Add aligned images to processing list widget
                 widget = self.main_layout.list_widget.aligned_images_list
-                self.main_layout.set_image_list(
-                    returned["image_table"], "aligned", widget
-                )
+                self.main_layout.set_image_list(returned["image_table"], widget)
 
                 # Create pop-up on operation finish.
                 props = {}
@@ -430,10 +427,10 @@ class MainWindow(qtw.QMainWindow):
                         self.main_layout.list_widget.laplacian_images_list
                     )
                     self.main_layout.set_image_list(
-                        returned["image_table"], "gaussian", blurred_widget
+                        returned["image_table"], blurred_widget
                     )
                     self.main_layout.set_image_list(
-                        returned["image_table"], "laplacian", laplacian_widget
+                        returned["image_table"], laplacian_widget
                     )
 
                     props = {}
@@ -496,7 +493,7 @@ class MainWindow(qtw.QMainWindow):
                         # Add stacked image to processing list widget
                         stacked_widget = self.main_layout.list_widget.stacked_image_list
                         self.main_layout.set_image_list(
-                            returned["image_table"], "stacked", stacked_widget
+                            returned["image_table"], stacked_widget
                         )
 
                         props = {}
@@ -534,7 +531,7 @@ class MainWindow(qtw.QMainWindow):
                     # Add stacked image to processing list widget
                     stacked_widget = self.main_layout.list_widget.stacked_image_list
                     self.main_layout.set_image_list(
-                        returned["image_table"], "stacked", stacked_widget
+                        returned["image_table"], stacked_widget
                     )
 
                 self.pyramid_calc.finished.connect(pyramid_finished)
@@ -700,8 +697,9 @@ class MainLayout(qtw.QWidget):
     image_scale_factor_range = [1, 5]
 
     def __init__(self, parent):
-        self.ImageHandler = parent.ImageHandler
+        self.Parent = parent
         self.Utilities = parent.Utilities
+
         super().__init__()
 
         self.list_widget = ImageListWidget(self)
@@ -744,7 +742,7 @@ class MainLayout(qtw.QWidget):
         )  # Reset zoom on new image lad, file menu connection
 
     # Update list of loaded images
-    def set_image_list(self, image_paths, im_type=None, widget=None):
+    def set_image_list(self, image_paths, widget=None):
         self.image_paths = image_paths
 
         if len(self.image_paths) > 0 and widget:  # Images loaded, display their names.
@@ -780,7 +778,7 @@ class MainLayout(qtw.QWidget):
     # Update image of QGraphicsView
     def setLoadedImage(self, item, im_type):
         if len(self.image_paths) > 0:  # Check if images have been loaded
-            np_array = self.ImageHandler.getImageFromPath(
+            np_array = self.Parent.ImageHandler.getImageFromPath(
                 item.data(qtc.Qt.UserRole), im_type
             )
 

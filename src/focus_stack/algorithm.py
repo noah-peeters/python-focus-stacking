@@ -38,7 +38,7 @@ class ImageHandler:
         grayscale_memmap[:] = image_grayscale
 
         # Store memmaps
-        self.item_storage[image_path] = {
+        self.image_storage[image_path] = {
             "rgb_source": rgb_memmap,
             "grayscale_source": grayscale_memmap,
             "image_shape": image_shape,
