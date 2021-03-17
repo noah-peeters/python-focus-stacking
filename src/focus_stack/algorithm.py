@@ -309,9 +309,8 @@ class LaplacianPixelAlgorithm:
             Calculate output image
         """
         # Create memmap (same size as rgb input)
-        stacked_temp_file = tempfile.NamedTemporaryFile()
         stacked_memmap = np.memmap(
-            stacked_temp_file,
+            tempfile.NamedTemporaryFile(),
             mode="w+",
             shape=self.Parent.image_shape,
             dtype=rgb_images[0].dtype,
@@ -355,11 +354,8 @@ class LaplacianPixelAlgorithm:
 
         yield rgb_images[0].shape[0]  # Finished
 
-        # Delete unused memmaps
-        del rgb_images
-        del laplacian_images
-
-        self.Parent.stacked_image_temp_file = stacked_temp_file  # Store temp file
+        # Store stacked image
+        self.Parent.image_storage["stacked image"] = stacked_memmap
 
 
 class PyramidAlgorithm:
