@@ -32,6 +32,7 @@ class LoadImages(qtc.QThread):
     def run(self):
         start_time = time.time()
         from src.focus_stack.algorithm import loadImage
+        
         process = ray.get([loadImage.remote(path) for path in self.files])
 
         # Unpack returned values
