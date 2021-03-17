@@ -11,9 +11,30 @@ from src.focus_stack.utilities import Utilities
 log = logging.getLogger(__name__)
 
 
+# Function to load an image
+@ray.remote(num_returns=2)
+def loadImage(image_path):
+    """
+    Load an image in RGB, convert to grayscale and get its shape.
+    """
+    # Load in memory using cv2
+    image_bgr = cv2.imread(image_path)
+    image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+    image_grayscale = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+    image_shape = image_bgr.shape
+
+    # Return images
+    return image_path, {
+        "rgb_source": image_rgb,
+        "grayscale_source": image_grayscale,
+        "image_shape": image_shape,
+    }
+
+
 @ray.remote
 class ImageHandler:
     image_shape = []
+    image_storage = []
     # Tempfile setup
     rgb_images_temp_files = {}
     grayscale_images_temp_files = {}
@@ -29,6 +50,7 @@ class ImageHandler:
 
     # Load an image
     def loadImage(self, image_path):
+        print(image_path)
         """
         Load a single image (RGB and grayscale) using a memmap inside a tempfile.
         Keep a reference to the tempfiles, so they don't get destroyed.

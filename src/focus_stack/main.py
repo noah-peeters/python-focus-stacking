@@ -9,9 +9,10 @@ import random
 import string
 import logging
 import ray
+import psutil
 
 # Initialize ray
-ray.init()
+ray.init(num_cpus=psutil.cpu_count(logical=False))
 
 # Setup logging
 class OneLineExceptionFormatter(logging.Formatter):

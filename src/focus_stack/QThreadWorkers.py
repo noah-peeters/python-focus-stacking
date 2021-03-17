@@ -15,14 +15,15 @@ class LoadImages(qtc.QThread):
     finishedImage = qtc.pyqtSignal(str)
     finished = qtc.pyqtSignal(dict)
 
-    def __init__(self, files, algorithm):
+    def __init__(self, files, image_handler):
         super().__init__()
 
         self.files = files
         self.is_killed = False
+        self.image_table = []
 
-        # Initialize algorithm
-        self.Algorithm = algorithm
+        # Initialize ImageHandler
+        self.ImageHandler = image_handler
 
     def update_ui(self, path):
         self.image_table.append(path)  # Append loaded image to table
@@ -30,11 +31,25 @@ class LoadImages(qtc.QThread):
 
     def run(self):
         start_time = time.time()
-        self.image_table = self.files
-        futures = [self.Algorithm.loadImage.remote(path) for path in self.files]
-        ray.get(futures)
+        from src.focus_stack.algorithm import loadImage
+        paths, infos = [loadImage.remote(path) for path in self.files]
+        paths = ray.get(paths)
+        infos = ray.get(infos)
 
-        # Operation ended
+        # Create image storage dictionary
+        image_dictionary = {}
+        for index, path in enumerate(paths):
+            print(type(path))
+            print(type(infos[index]))
+            image_dictionary[path] = {}
+            image_dictionary[path] = infos[index]
+
+        # Overwrite images' information inside ImageHandler class
+        self.ImageHandler.image_storage = image_dictionary
+        print(image_dictionary)
+        # Get loaded images
+        for path in image_dictionary:
+            self.image_table.append(path)
         self.finished.emit(
             {
                 "execution_time": round(time.time() - start_time, 4),
@@ -245,18 +260,18 @@ class ScaleImages(qtc.QThread):
 
     def run(self):
         for path in self.image_paths:
-            np_array = self.Algorithm.getImageFromPath.remote(
-                path, self.im_type
-            )  # Get image
-            np_array = ray.get(np_array)
+            # Get image memmap
+            np_array = ray.get(
+                self.Algorithm.getImageFromPath.remote(path, self.im_type)
+            )
+
             if np_array.any():
                 # Downscale image to scale_factor (percentage) of original
-                scaled = self.Algorithm.downscaleImage.remote(
-                    np_array, self.scale_factor
+                scaled = ray.get(
+                    self.Algorithm.downscaleImage.remote(np_array, self.scale_factor)
                 )
-                scaled = ray.get(scaled)
-
+                # Convert image to QPixmap and send to UI
                 self.finishedImage.emit(
                     [path, self.Utilities.numpyArrayToQPixMap(scaled)]
-                )  # Convert image to QPixmap
+                )
         self.finished.emit(True)
