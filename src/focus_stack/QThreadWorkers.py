@@ -37,14 +37,16 @@ class LoadImages(qtc.QThread):
 
         # Unpack returned values
         image_dictionary = {}
-        for index, info_table in enumerate(process):
+        for info_table in process:
             path = info_table[0]
             info = info_table[1]
+            image_shape = info["image_shape"]
             image_dictionary[path] = {}
             image_dictionary[path] = info
 
         # Overwrite images' information inside ImageHandler class
         self.ImageHandler.image_storage = image_dictionary
+        self.ImageHandler.image_shape = image_shape
 
         # Get loaded images
         for path in image_dictionary:

@@ -600,7 +600,7 @@ class MainWindow(qtw.QMainWindow):
                 "processing", False
             )  # Toggle image processing actions off (no images loaded)
             self.main_layout.image_preview.setImage(None)  # Remove image from preview
-            self.ImageHandler.clearTempFiles.remote()  # Clear all temp files
+            self.ImageHandler.clearImages.remote()  # Clear all temp files
 
     # Display result message after operation finished
     def result_message(self, returned_table, props):
@@ -712,16 +712,16 @@ class MainLayout(qtw.QWidget):
 
         # List widget clicked connections
         self.list_widget.loaded_images_list.itemClicked.connect(
-            lambda item: self.setLoadedImage(item, "source")
+            lambda item: self.setLoadedImage(item, "rgb_source")
         )  # Loaded images --> display RGB preview
         self.list_widget.aligned_images_list.itemClicked.connect(
-            lambda item: self.setLoadedImage(item, "aligned")
+            lambda item: self.setLoadedImage(item, "rgb_aligned")
         )  # Aligned images --> display RGB preview
         self.list_widget.gaussian_blurred_images_list.itemClicked.connect(
-            lambda item: self.setLoadedImage(item, "gaussian")
+            lambda item: self.setLoadedImage(item, "grayscale_gaussian")
         )  # Gaussian blurred images --> display RGB preview
         self.list_widget.laplacian_images_list.itemClicked.connect(
-            lambda item: self.setLoadedImage(item, "laplacian")
+            lambda item: self.setLoadedImage(item, "grayscale_laplacian")
         )  # Laplacian images --> display grayscale preview (float 64)
         self.list_widget.stacked_image_list.itemClicked.connect(
             lambda item: self.setLoadedImage(item, "stacked")

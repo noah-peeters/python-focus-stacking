@@ -183,10 +183,8 @@ class ImageHandler:
 
     # Export image to path
     def exportImage(self, path):
-        if self.stacked_image_temp_file:
-            output = np.memmap(
-                self.stacked_image_temp_file, mode="r", shape=self.image_shape
-            )
+        if "stacked image" in self.image_storage:
+            output = self.image_storage["stacked image"]
             rgb = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
             cv2.imwrite(path, rgb)
             del output
@@ -194,39 +192,10 @@ class ImageHandler:
         else:
             return False  # No stacked image
 
-    # Get image (using tempfile) from path to tempfile
+    # Get image (specified type aka. RGB, grayscale, aligned, ...) from storage
     def getImageFromPath(self, path, im_type):
-        # Get image from path
-        image = None
-        if im_type == "source":
-            image = self.rgb_images_temp_files[path]
-            return np.memmap(image, mode="r", shape=self.image_shape)
-        elif im_type == "aligned":
-            image = self.aligned_images_temp_files[path]
-            return np.memmap(image, mode="r", shape=self.image_shape)
-        elif im_type == "gaussian":
-            image = self.gaussian_blurred_images_temp_files[path]
-            return np.memmap(
-                image, mode="r", shape=(self.image_shape[0], self.image_shape[1])
-            )
-        elif im_type == "laplacian":
-            image = self.laplacian_images_temp_files[path]
-            return np.memmap(
-                image,
-                mode="r",
-                shape=(self.image_shape[0], self.image_shape[1]),
-                dtype="float64",
-            )
-        elif im_type == "stacked":
-            image = self.stacked_image_temp_file
-            return np.memmap(image, mode="r", shape=self.image_shape)
-
-    # Return aligned RGB images (if any) or return source RGB images
-    def useSource_or_Aligned(self):
-        if len(self.aligned_images_temp_files) > 0:
-            return self.aligned_images_temp_files  # Use aligned images
-        else:
-            return self.rgb_images_temp_files  # Use non-aligned source images
+        if path in self.image_storage and im_type in self.image_storage[path]:
+            return self.image_storage[path][im_type]
 
     # Downscale an image
     def downscaleImage(self, image, scale_percent):
@@ -236,17 +205,9 @@ class ImageHandler:
         )  # New width and height
         return cv2.resize(image, new_dim, interpolation=cv2.INTER_AREA)
 
-    # Clear all temp file references
+    # Clear all images
     def clearTempFiles(self):
-        """
-        Clear all temp file references (Python will garbage-collect tempfiles automatically once they aren't referenced)
-        """
-        self.rgb_images_temp_files = {}
-        self.grayscale_images_temp_files = {}
-        self.aligned_images_temp_files = {}
-        self.gaussian_blurred_images_temp_files = {}
-        self.laplacian_images_temp_files = {}
-        self.stacked_image_temp_file = None
+        self.image_storage = {}
 
 
 class LaplacianPixelAlgorithm:
@@ -261,11 +222,15 @@ class LaplacianPixelAlgorithm:
 
     # Compute the laplacian edges of an image
     def computeLaplacianEdges(self, image_path, parameters):
-        grayscale_image = np.memmap(
-            self.Parent.grayscale_images_temp_files[image_path],
-            mode="r",
-            shape=(self.Parent.image_shape[0], self.Parent.image_shape[1]),
-        )
+        if not self.Parent.image_storage[image_path]:
+            return
+        elif not self.Parent.image_storage[image_path]["grayscale_source"]:
+            return
+        
+        if self.Parent.image_storage[image_path]["grayscale_aligned"]:
+            grayscale_image = self.Parent.image_storage[image_path]["grayscale_aligned"]
+        else:
+            grayscale_image = self.Parent.image_storage[image_path]["grayscale_source"]
 
         blurred = grayscale_image
         if parameters["GaussianBlur"] != 0:
@@ -281,33 +246,25 @@ class LaplacianPixelAlgorithm:
         )
         del grayscale_image
 
-        # Write gaussian blurred to disk
-        temp_gaussian_blurred_file = tempfile.NamedTemporaryFile()
+        # Save gaussian blurred grayscale
         memmapped_blur = np.memmap(
-            temp_gaussian_blurred_file,
+            tempfile.NamedTemporaryFile(),
             mode="w+",
             shape=(self.Parent.image_shape[0], self.Parent.image_shape[1]),
             dtype=blurred.dtype,
         )
         memmapped_blur[:] = blurred
-        self.Parent.gaussian_blurred_images_temp_files[
-            image_path
-        ] = temp_gaussian_blurred_file  # Store temporary file
-        del memmapped_blur
+        self.Parent.image_storage[image_path]["grayscale_gaussian"] = memmapped_blur
 
-        # Write laplacian to disk
-        temp_laplacian_file = tempfile.NamedTemporaryFile()
+        # Save laplacian grayscale
         memmapped_laplacian = np.memmap(
-            temp_laplacian_file,
+            tempfile.NamedTemporaryFile(),
             mode="w+",
             shape=(self.Parent.image_shape[0], self.Parent.image_shape[1]),
-            dtype=laplacian.dtype,
-        )  # dtype="float64" !!
+            dtype=blurred.dtype,
+        )
         memmapped_laplacian[:] = laplacian
-        self.Parent.laplacian_images_temp_files[
-            image_path
-        ] = temp_laplacian_file  # Store temporary file
-        del memmapped_laplacian
+        self.Parent.image_storage[image_path]["grayscale_laplacian"] = memmapped_laplacian
 
         return True
 
@@ -320,16 +277,28 @@ class LaplacianPixelAlgorithm:
         rgb_images = []
         laplacian_images = []
         for im_path in image_paths:
+            if "rgb_aligned" in self.Parent.image_storage[im_path]:
+                rgb_image = self.Parent.image_storage[im_path]["rgb_aligned"]
+            else:
+                rgb_image = self.Parent.image_storage[im_path]["rgb_source"]
+
             rgb_images.append(
                 np.memmap(
-                    self.Parent.useSource_or_Aligned()[im_path],
+                    rgb_image,
                     mode="r",
                     shape=self.Parent.image_shape,
                 )
             )
+            if "grayscale_aligned" in self.Parent.image_storage[im_path]:
+                grayscale_image = self.Parent.image_storage[im_path][
+                    "grayscale_aligned"
+                ]
+            else:
+                grayscale_image = self.Parent.image_storage[im_path]["grayscale_source"]
+
             laplacian_images.append(
                 np.memmap(
-                    self.Parent.laplacian_images_temp_files[im_path],
+                    grayscale_image,
                     mode="r",
                     shape=(self.Parent.image_shape[0], self.Parent.image_shape[1]),
                     dtype="float64",
