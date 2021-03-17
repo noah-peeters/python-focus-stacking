@@ -37,7 +37,7 @@ def loadImage(image_path):
 @ray.remote
 class ImageHandler:
     image_shape = []
-    image_storage = []
+    image_storage = {}
     # Tempfile setup
     rgb_images_temp_files = {}
     grayscale_images_temp_files = {}
@@ -51,55 +51,12 @@ class ImageHandler:
         self.LaplacianPixelAlgorithm = LaplacianPixelAlgorithm(self)
         self.PyramidAlgorithm = PyramidAlgorithm(self)
 
-    # Load an image
-    def loadImage(self, image_path):
-        print(image_path)
-        """
-        Load a single image (RGB and grayscale) using a memmap inside a tempfile.
-        Keep a reference to the tempfiles, so they don't get destroyed.
-        """
-        # Load in memory using cv2
-        image_bgr = cv2.imread(image_path)
-        image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-        image_grayscale = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
-        self.image_shape = image_bgr.shape
-
-        # Write to disk (memmap + tempfile)
-        temp_rgb_file = tempfile.NamedTemporaryFile()
-        memmapped_rgb = np.memmap(temp_rgb_file, mode="w+", shape=self.image_shape)
-        memmapped_rgb[:] = image_rgb
-        # Keep reference to temporary file
-        self.rgb_images_temp_files[image_path] = temp_rgb_file
-
-        temp_grayscale_file = tempfile.NamedTemporaryFile()
-        memmapped_grayscale = np.memmap(
-            temp_grayscale_file,
-            mode="w+",
-            shape=(self.image_shape[0], self.image_shape[1]),
-        )
-        memmapped_grayscale[:] = image_grayscale
-        self.grayscale_images_temp_files[image_path] = temp_grayscale_file
-
-        del memmapped_rgb
-        del memmapped_grayscale
-        return True  # Successfully loaded image to memmap
-
     # Align a single image
     def alignImage(self, im1_path, im2_path, parameters):
         # Get memmap's
-        im1_gray = np.memmap(
-            self.grayscale_images_temp_files[im1_path],
-            mode="r",
-            shape=(self.image_shape[0], self.image_shape[1]),
-        )
-        im2_gray = np.memmap(
-            self.grayscale_images_temp_files[im2_path],
-            mode="r+",
-            shape=(self.image_shape[0], self.image_shape[1]),
-        )
-        im2_rgb = np.memmap(
-            self.rgb_images_temp_files[im2_path], mode="r", shape=self.image_shape
-        )
+        im1_gray = self.image_storage[im1_path]["grayscale_source"]
+        im2_gray = self.image_storage[im2_path]["grayscale_source"]
+        im2_rgb = self.image_storage[im2_path]["rgb_source"]
 
         # Get motion model from parameters
         warp_mode = cv2.MOTION_TRANSLATION  # Default
@@ -185,19 +142,11 @@ class ImageHandler:
                 flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP,
             )
 
-        del im2_rgb
+        # Store aligned grayscale image
+        self.image_storage[im2_path]["grayscale_aligned"] = im2_grayscale_aligned
 
-        # Write aligned grayscale image
-        im2_gray[:] = im2_grayscale_aligned
-        del im2_gray
-
-        # Write aligned to new memmap (tempfile)
-        temp_aligned_rgb = tempfile.NamedTemporaryFile()
-        aligned_rgb = np.memmap(temp_aligned_rgb, mode="w+", shape=self.image_shape)
-        aligned_rgb[:] = im2_aligned
-        self.aligned_images_temp_files[
-            im2_path
-        ] = temp_aligned_rgb  # Keep reference to temporary file
+        # Store aligned RGB image
+        self.image_storage[im2_path]["rgb_aligned"] = im2_aligned
 
         return im1_path, im2_path, True  # Operation success
 
