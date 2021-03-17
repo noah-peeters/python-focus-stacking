@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 
 
 # Function to load an image
-@ray.remote(num_returns=2)
+@ray.remote
 def loadImage(image_path):
     """
     Load an image in RGB, convert to grayscale and get its shape.
@@ -24,11 +24,14 @@ def loadImage(image_path):
     image_shape = image_bgr.shape
 
     # Return images
-    return image_path, {
-        "rgb_source": image_rgb,
-        "grayscale_source": image_grayscale,
-        "image_shape": image_shape,
-    }
+    return [
+        image_path,
+        {
+            "rgb_source": image_rgb,
+            "grayscale_source": image_grayscale,
+            "image_shape": image_shape,
+        },
+    ]
 
 
 @ray.remote

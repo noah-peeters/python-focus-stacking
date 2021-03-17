@@ -32,21 +32,19 @@ class LoadImages(qtc.QThread):
     def run(self):
         start_time = time.time()
         from src.focus_stack.algorithm import loadImage
-        paths, infos = [loadImage.remote(path) for path in self.files]
-        paths = ray.get(paths)
-        infos = ray.get(infos)
+        process = ray.get([loadImage.remote(path) for path in self.files])
 
-        # Create image storage dictionary
+        # Unpack returned values
         image_dictionary = {}
-        for index, path in enumerate(paths):
-            print(type(path))
-            print(type(infos[index]))
+        for index, info_table in enumerate(process):
+            path = info_table[0]
+            info = info_table[1]
             image_dictionary[path] = {}
-            image_dictionary[path] = infos[index]
+            image_dictionary[path] = info
 
         # Overwrite images' information inside ImageHandler class
         self.ImageHandler.image_storage = image_dictionary
-        print(image_dictionary)
+
         # Get loaded images
         for path in image_dictionary:
             self.image_table.append(path)
