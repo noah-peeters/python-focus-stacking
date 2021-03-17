@@ -6,6 +6,7 @@
 import time
 import PyQt5.QtCore as qtc
 import collections
+import ray
 from src.focus_stack.utilities import Utilities
 
 
@@ -23,29 +24,21 @@ class LoadImages(qtc.QThread):
         # Initialize algorithm
         self.Algorithm = algorithm
 
+    def update_ui(self, path):
+        self.image_table.append(path)  # Append loaded image to table
+        self.finishedImage.emit(path)   # Send finished path back to UI
+
     def run(self):
         start_time = time.time()
-        image_table = []
-        for image_path in self.files:
-            bool = self.Algorithm.loadImage(image_path)
-
-            if not bool:  # Operation failed
-                break
-
-            image_table.append(image_path)  # Append loaded image to table
-
-            if (
-                self.is_killed
-            ):  # Operation stopped from UI (image load still successful)
-                break
-            # Send finished image path back to UI
-            self.finishedImage.emit(image_path)
-
+        self.image_table = self.files
+        futures = [self.Algorithm.loadImage.remote(path) for path in self.files]
+        ray.get(futures)
+        
         # Operation ended
         self.finished.emit(
             {
                 "execution_time": round(time.time() - start_time, 4),
-                "image_table": image_table,
+                "image_table": self.image_table,
                 "killed_by_user": self.is_killed,
             }
         )
@@ -74,7 +67,7 @@ class AlignImages(qtc.QThread):
             []
         )  # Table for processed images (to check if all have been loaded)
         for image_path in self.files:
-            image0, image1, success = self.Algorithm.alignImage(
+            image0, image1, success = self.Algorithm.alignImage.remote(
                 image0, image_path, self.parameters
             )
 
@@ -252,11 +245,15 @@ class ScaleImages(qtc.QThread):
 
     def run(self):
         for path in self.image_paths:
-            np_array = self.Algorithm.getImageFromPath(path, self.im_type)  # Get image
+            np_array = self.Algorithm.getImageFromPath.remote(path, self.im_type)  # Get image
+            np_array = ray.get(np_array)
             if np_array.any():
-                scaled = self.Algorithm.downscaleImage(
+                # Downscale image to scale_factor (percentage) of original
+                scaled = self.Algorithm.downscaleImage.remote(
                     np_array, self.scale_factor
-                )  # Downscale image to scale_factor (percentage) of original
+                )
+                scaled = ray.get(scaled)
+                
                 self.finishedImage.emit(
                     [path, self.Utilities.numpyArrayToQPixMap(scaled)]
                 )  # Convert image to QPixmap

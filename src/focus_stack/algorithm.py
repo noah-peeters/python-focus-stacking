@@ -3,12 +3,14 @@ import cv2
 import tempfile
 from scipy import ndimage
 import logging
+import ray
 
 from src.focus_stack.utilities import Utilities
 
+# Setup log
 log = logging.getLogger(__name__)
 
-
+@ray.remote
 class ImageHandler:
     image_shape = []
     # Tempfile setup
@@ -40,9 +42,8 @@ class ImageHandler:
         temp_rgb_file = tempfile.NamedTemporaryFile()
         memmapped_rgb = np.memmap(temp_rgb_file, mode="w+", shape=self.image_shape)
         memmapped_rgb[:] = image_rgb
-        self.rgb_images_temp_files[
-            image_path
-        ] = temp_rgb_file  # Keep reference to temporary file
+        # Keep reference to temporary file
+        self.rgb_images_temp_files[image_path] = temp_rgb_file
 
         temp_grayscale_file = tempfile.NamedTemporaryFile()
         memmapped_grayscale = np.memmap(
@@ -400,28 +401,14 @@ class PyramidAlgorithm:
         self.Parent = parent
         log.info("Initialized gaussian/laplacian pyramid algorithm.")
 
-    def generating_kernel(a):
-        kernel = np.array([0.25 - a / 2.0, 0.25, a, 0.25, 0.25 - a / 2.0])
+    def generating_kernel(a1, a2=None):
+        if a1 and not a2:
+            # Not called with self
+            kernel = np.array([0.25 - a1 / 2.0, 0.25, a1, 0.25, 0.25 - a1 / 2.0])
+        else:
+            # Called with self
+            kernel = np.array([0.25 - a2 / 2.0, 0.25, a2, 0.25, 0.25 - a2 / 2.0])
         return np.outer(kernel, kernel)
-
-    def reduce_layer(self, layer, kernel=generating_kernel(0.4)):
-        if len(layer.shape) == 2:
-            convolution = self.convolve(layer, kernel)
-            return convolution[::2, ::2]
-
-        ch_layer = self.reduce_layer(layer[:, :, 0])
-        next_layer = np.memmap(
-            tempfile.NamedTemporaryFile(),
-            mode="w+",
-            shape=tuple(list(ch_layer.shape) + [layer.shape[2]]),
-            dtype=ch_layer.dtype,
-        )
-        next_layer[:, :, 0] = ch_layer
-
-        for channel in range(1, layer.shape[2]):
-            next_layer[:, :, channel] = self.reduce_layer(layer[:, :, channel])
-
-        return next_layer
 
     def expand_layer(self, layer, kernel=generating_kernel(0.4)):
         if len(layer.shape) == 2:
@@ -452,14 +439,36 @@ class PyramidAlgorithm:
     def convolve(self, image, kernel=generating_kernel(0.4)):
         return ndimage.convolve(image.astype(np.float64), kernel, mode="mirror")
 
-    def gaussian_pyramid(self, images, levels):
+    def gaussian_pyramid(self, levels, images):
+        @ray.remote
+        def reduce_layer(layer, kernel=self.generating_kernel(0.4)):
+            if len(layer.shape) == 2:
+                convolution = self.convolve(layer, kernel)
+                return convolution[::2, ::2]
+
+            ch_layer = ray.get(reduce_layer.remote(layer[:, :, 0]))
+            next_layer = np.memmap(
+                tempfile.NamedTemporaryFile(),
+                mode="w+",
+                shape=tuple(list(ch_layer.shape) + [layer.shape[2]]),
+                dtype=ch_layer.dtype,
+            )
+            next_layer[:, :, 0] = ch_layer
+
+            for channel in range(1, layer.shape[2]):
+                next_layer[:, :, channel] = ray.get(
+                    reduce_layer.remote(layer[:, :, channel])
+                )
+
+            return next_layer
+
         # Convert images to float64
         for image in images:
             image = image.astype(np.float64, copy=False)
         pyramid = [images]
 
         while levels > 0:
-            next_layer = self.reduce_layer(pyramid[-1][0])
+            next_layer = ray.get(reduce_layer.remote(pyramid[-1][0]))
             next_layer_size = [len(images)] + list(next_layer.shape)
 
             pyramid.append(
@@ -473,7 +482,7 @@ class PyramidAlgorithm:
             pyramid[-1][0] = next_layer
 
             for layer in range(1, len(images)):
-                pyramid[-1][layer] = self.reduce_layer(pyramid[-2][layer])
+                pyramid[-1][layer] = ray.get(reduce_layer.remote(pyramid[-2][layer]))
             levels -= 1
 
         return pyramid
@@ -636,6 +645,7 @@ class PyramidAlgorithm:
 
     def fusePyramid(self, image_paths, parameters):
         log.info("Start laplacian pyramid stacking.")
+
         images = []
         for path in image_paths:
             images.append(
@@ -654,8 +664,7 @@ class PyramidAlgorithm:
         # Calculate gaussian pyramid
         smallest_side = min(images[0].shape[:2])
         depth = int(np.log2(smallest_side / parameters["MinLaplacianSize"]))
-        gaussian = self.gaussian_pyramid(images, depth)
-
+        gaussian = self.gaussian_pyramid(depth, images)
         log.info("Just calculated gaussian pyramid.")
         log.info(
             "Memory is now: {} MB".format(round(Utilities().python_memory_usage()), 2)
@@ -663,8 +672,6 @@ class PyramidAlgorithm:
 
         # Calculate laplacian pyramid
         pyramids = self.laplacian_pyramid(images, gaussian)
-        print("Just calculated laplacian pyramid")
-
         log.info("Just calculated laplacian pyramid.")
         log.info(
             "Memory is now: {} MB".format(round(Utilities().python_memory_usage()), 2)
@@ -677,7 +684,6 @@ class PyramidAlgorithm:
             fused.append(self.get_fused_laplacian(pyramids[layer]))
 
         fused = fused[::-1]
-
         log.info("Just fused pyramid.")
         log.info(
             "Memory is now: {} MB".format(round(Utilities().python_memory_usage()), 2)
@@ -706,7 +712,6 @@ class PyramidAlgorithm:
         )
 
         stacked_memmap[:] = image
-
         log.info("Successfully created stacked image.")
         log.info(
             "Memory is now: {} MB".format(round(Utilities().python_memory_usage()), 2)

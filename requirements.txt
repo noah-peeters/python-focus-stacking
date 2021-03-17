@@ -7,3 +7,4 @@ qimage2ndarray
 setuptools
 scipy
 psutil
+ray

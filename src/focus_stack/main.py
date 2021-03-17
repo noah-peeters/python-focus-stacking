@@ -8,6 +8,10 @@ import PyQt5.QtGui as qtg
 import random
 import string
 import logging
+import ray
+
+# Initialize ray
+ray.init()
 
 # Setup logging
 class OneLineExceptionFormatter(logging.Formatter):
@@ -45,7 +49,7 @@ class MainWindow(qtw.QMainWindow):
         """
         from src.focus_stack.algorithm import ImageHandler
 
-        self.ImageHandler = ImageHandler()
+        self.ImageHandler = ImageHandler.remote()
 
         from src.focus_stack.utilities import Utilities
 
@@ -595,7 +599,7 @@ class MainWindow(qtw.QMainWindow):
                 "processing", False
             )  # Toggle image processing actions off (no images loaded)
             self.main_layout.image_preview.setImage(None)  # Remove image from preview
-            self.ImageHandler.clearTempFiles()  # Clear all temp files
+            self.ImageHandler.clearTempFiles.remote()  # Clear all temp files
 
     # Display result message after operation finished
     def result_message(self, returned_table, props):
@@ -807,8 +811,10 @@ class MainLayout(qtw.QWidget):
     # Update image of QGraphicsView
     def setLoadedImage(self, item, im_type):
         if len(self.image_paths) > 0:  # Check if images have been loaded
-            np_array = self.ImageHandler.getImageFromPath(
-                item.data(qtc.Qt.UserRole), im_type
+            np_array = ray.get(
+                self.ImageHandler.getImageFromPath.remote(
+                    item.data(qtc.Qt.UserRole), im_type
+                )
             )
             if np_array.any():
                 qPixMap = self.Utilities.numpyArrayToQPixMap(np_array)
