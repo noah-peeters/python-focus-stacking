@@ -53,13 +53,30 @@ class ImageHandler:
 
     # Align a single image
     def alignImage(self, im1_path, im2_path, parameters):
+        # Checks
+        if not im1_path in self.image_storage:
+            return
+        elif not im2_path in self.image_storage:
+            return
+        elif not "grayscale_source" in self.image_storage[im1_path]:
+            return
+        elif not "grayscale_source" in self.image_storage[im2_path]:
+            return
+        elif not "rgb_source" in self.image_storage[im2_path]:
+            return
+        elif not "image_shape" in self.image_storage[im2_path]:
+            return
+        
+        # Shorthands
+        im2_storage = self.image_storage[im2_path]
+        shape = im2_storage["image_shape"]
+
         # Get memmap's
         im1_gray = self.image_storage[im1_path]["grayscale_source"]
-        im2_gray = self.image_storage[im2_path]["grayscale_source"]
-        im2_rgb = self.image_storage[im2_path]["rgb_source"]
+        im2_gray = im2_storage["grayscale_source"]
+        im2_rgb = im2_storage["rgb_source"]
 
         # Get motion model from parameters
-        warp_mode = cv2.MOTION_TRANSLATION  # Default
         mode = parameters["WarpMode"]
         if mode == "Translation":
             warp_mode = cv2.MOTION_TRANSLATION
@@ -142,11 +159,19 @@ class ImageHandler:
                 flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP,
             )
 
-        # Store aligned grayscale image
-        self.image_storage[im2_path]["grayscale_aligned"] = im2_grayscale_aligned
+        # Store aligned grayscale image in new memmap
+        im2_storage["grayscale_aligned"] = np.memmap(
+            tempfile.NamedTemporaryFile(), mode="w+", shape=(shape[0], shape[1])
+        )
+        im2_storage["grayscale_aligned"][:] = im2_grayscale_aligned
 
-        # Store aligned RGB image
-        self.image_storage[im2_path]["rgb_aligned"] = im2_aligned
+        # Store aligned RGB image in new memmap
+        im2_storage["rgb_aligned"] = np.memmap(
+            tempfile.NamedTemporaryFile(),
+            mode="w+",
+            shape=shape,
+        )
+        im2_storage["rgb_aligned"][:] = im2_aligned
 
         return im1_path, im2_path, True  # Operation success
 
