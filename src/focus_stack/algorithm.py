@@ -66,7 +66,7 @@ class ImageHandler:
             return
         elif not "image_shape" in self.image_storage[im2_path]:
             return
-        
+
         # Shorthands
         im2_storage = self.image_storage[im2_path]
         shape = im2_storage["image_shape"]
