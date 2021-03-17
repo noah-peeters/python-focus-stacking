@@ -49,9 +49,11 @@ class MainWindow(qtw.QMainWindow):
             Imports
         """
         from src.focus_stack.algorithm import ImageHandler
+
         self.ImageHandler = ImageHandler()
 
         from src.focus_stack.utilities import Utilities
+
         self.Utilities = Utilities()
 
         """
@@ -597,6 +599,7 @@ class MainWindow(qtw.QMainWindow):
             self.main_layout.image_preview.setImage(None)  # Remove image from preview
 
             from src.focus_stack.algorithm import ImageHandler
+
             ImageHandler.image_storage = {}  # Clear all image memmaps
 
     # Display result message after operation finished
