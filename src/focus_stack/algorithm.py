@@ -226,7 +226,7 @@ class LaplacianPixelAlgorithm:
             return
         elif not self.Parent.image_storage[image_path]["grayscale_source"]:
             return
-        
+
         if self.Parent.image_storage[image_path]["grayscale_aligned"]:
             grayscale_image = self.Parent.image_storage[image_path]["grayscale_aligned"]
         else:
@@ -264,7 +264,9 @@ class LaplacianPixelAlgorithm:
             dtype=blurred.dtype,
         )
         memmapped_laplacian[:] = laplacian
-        self.Parent.image_storage[image_path]["grayscale_laplacian"] = memmapped_laplacian
+        self.Parent.image_storage[image_path][
+            "grayscale_laplacian"
+        ] = memmapped_laplacian
 
         return True
 
