@@ -32,6 +32,7 @@ class LoadImages(qtc.QThread):
     def run(self):
         # Clear loaded images
         self.ImageHandler.image_storage = {}
+        
         start_time = time.time()
         
         # Start image loading in parallel
@@ -249,7 +250,7 @@ class ScaleImages(qtc.QThread):
         for path in self.image_paths:
             # Get image memmap
             np_array = self.ImageHandler.getImageFromPath(path, self.im_type)
-            
+
             if np_array.any():
                 # Downscale image to scale_factor (percentage) of original
                 scaled = ray.get(

@@ -32,9 +32,19 @@ class ImageHandler:
         image_shape = image_rgb.shape
 
         # Write to memmaps
-        rgb_memmap = np.memmap(tempfile.NamedTemporaryFile(), mode="w+", shape=image_shape, dtype=image_rgb.dtype)
+        rgb_memmap = np.memmap(
+            tempfile.NamedTemporaryFile(),
+            mode="w+",
+            shape=image_shape,
+            dtype=image_rgb.dtype,
+        )
         rgb_memmap[:] = image_rgb
-        grayscale_memmap = np.memmap(tempfile.NamedTemporaryFile(), mode="w+", shape=(image_shape[0], image_shape[1]), dtype=image_grayscale.dtype)
+        grayscale_memmap = np.memmap(
+            tempfile.NamedTemporaryFile(),
+            mode="w+",
+            shape=(image_shape[0], image_shape[1]),
+            dtype=image_grayscale.dtype,
+        )
         grayscale_memmap[:] = image_grayscale
 
         # Store memmaps
