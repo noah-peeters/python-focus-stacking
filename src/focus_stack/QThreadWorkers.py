@@ -7,6 +7,7 @@ import time
 import PyQt5.QtCore as qtc
 import collections
 import ray
+
 from src.focus_stack.utilities import Utilities
 
 
@@ -31,7 +32,9 @@ class LoadImages(qtc.QThread):
 
     def run(self):
         # Clear loaded images
-        self.ImageHandler.image_storage = {}
+        from src.focus_stack.algorithm import ImageHandler
+
+        ImageHandler.image_storage = {}
 
         start_time = time.time()
 

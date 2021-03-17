@@ -49,11 +49,9 @@ class MainWindow(qtw.QMainWindow):
             Imports
         """
         from src.focus_stack.algorithm import ImageHandler
-
         self.ImageHandler = ImageHandler()
 
         from src.focus_stack.utilities import Utilities
-
         self.Utilities = Utilities()
 
         """
@@ -597,7 +595,9 @@ class MainWindow(qtw.QMainWindow):
                 "processing", False
             )  # Toggle image processing actions off (no images loaded)
             self.main_layout.image_preview.setImage(None)  # Remove image from preview
-            self.ImageHandler.image_storage = {}  # Clear all image memmaps
+
+            from src.focus_stack.algorithm import ImageHandler
+            ImageHandler.image_storage = {}  # Clear all image memmaps
 
     # Display result message after operation finished
     def result_message(self, returned_table, props):
