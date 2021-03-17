@@ -11,47 +11,41 @@ from src.focus_stack.utilities import Utilities
 log = logging.getLogger(__name__)
 
 
-# Function to load an image
-@ray.remote
-def loadImage(image_path):
-    """
-    Load an image in RGB, convert to grayscale and get its shape.
-    """
-    # Load in memory using cv2
-    image_bgr = cv2.imread(image_path)
-    image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-    image_grayscale = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
-    image_shape = image_bgr.shape
-
-    # Return images
-    return [
-        image_path,
-        {
-            "rgb_source": image_rgb,
-            "grayscale_source": image_grayscale,
-            "image_shape": image_shape,
-        },
-    ]
-
-
-@ray.remote
 class ImageHandler:
-    image_shape = []
     image_storage = {}
-    # Tempfile setup
-    rgb_images_temp_files = {}
-    grayscale_images_temp_files = {}
-    aligned_images_temp_files = {}
-    gaussian_blurred_images_temp_files = {}
-    laplacian_images_temp_files = {}
-    stacked_image_temp_file = None
+    image_shape = []
 
     def __init__(self):
         # Initialize algorithms
         self.LaplacianPixelAlgorithm = LaplacianPixelAlgorithm(self)
         self.PyramidAlgorithm = PyramidAlgorithm(self)
 
+    # Function to load an image
+    @ray.remote
+    def loadImage(self, image_path):
+        """
+        Load an image in RGB, convert to grayscale and get its shape.
+        """
+        # Load in memory using cv2
+        image_rgb = cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2RGB)
+        image_grayscale = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2GRAY)
+        image_shape = image_rgb.shape
+
+        # Write to memmaps
+        rgb_memmap = np.memmap(tempfile.NamedTemporaryFile(), mode="w+", shape=image_shape, dtype=image_rgb.dtype)
+        rgb_memmap[:] = image_rgb
+        grayscale_memmap = np.memmap(tempfile.NamedTemporaryFile(), mode="w+", shape=(image_shape[0], image_shape[1]), dtype=image_grayscale.dtype)
+        grayscale_memmap[:] = image_grayscale
+
+        # Store memmaps
+        self.item_storage[image_path] = {
+            "rgb_source": rgb_memmap,
+            "grayscale_source": grayscale_memmap,
+            "image_shape": image_shape,
+        }
+
     # Align a single image
+    @ray.remote
     def alignImage(self, im1_path, im2_path, parameters):
         # Checks
         if not im1_path in self.image_storage:
@@ -194,20 +188,18 @@ class ImageHandler:
 
     # Get image (specified type aka. RGB, grayscale, aligned, ...) from storage
     def getImageFromPath(self, path, im_type):
+        print(self.image_storage)
         if path in self.image_storage and im_type in self.image_storage[path]:
             return self.image_storage[path][im_type]
 
     # Downscale an image
+    @ray.remote
     def downscaleImage(self, image, scale_percent):
         new_dim = (
             round(image.shape[1] * scale_percent / 100),
             round(image.shape[0] * scale_percent / 100),
         )  # New width and height
         return cv2.resize(image, new_dim, interpolation=cv2.INTER_AREA)
-
-    # Clear all images
-    def clearTempFiles(self):
-        self.image_storage = {}
 
 
 class LaplacianPixelAlgorithm:
@@ -221,6 +213,7 @@ class LaplacianPixelAlgorithm:
         log.info("Initialized Laplacian pixel algorithm.")
 
     # Compute the laplacian edges of an image
+    @ray.remote
     def computeLaplacianEdges(self, image_path, parameters):
         if not self.Parent.image_storage[image_path]:
             return
@@ -271,6 +264,7 @@ class LaplacianPixelAlgorithm:
         return True
 
     # Calculate output image (final stacking)
+    @ray.remote
     def stackImages(self, image_paths):
         """
         Load rgb images and laplacian gradients

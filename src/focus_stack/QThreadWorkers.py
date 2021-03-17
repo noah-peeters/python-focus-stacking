@@ -30,6 +30,9 @@ class LoadImages(qtc.QThread):
         self.finishedImage.emit(path)  # Send finished path back to UI
 
     def run(self):
+        # Clear loaded images
+        self.ImageHandler.image_storage = {}
+        
         start_time = time.time()
         from src.focus_stack.algorithm import loadImage
 
@@ -51,6 +54,7 @@ class LoadImages(qtc.QThread):
         # Get loaded images
         for path in image_dictionary:
             self.image_table.append(path)
+        
         self.finished.emit(
             {
                 "execution_time": round(time.time() - start_time, 4),
@@ -250,11 +254,11 @@ class ScaleImages(qtc.QThread):
     finishedImage = qtc.pyqtSignal(list)
     finished = qtc.pyqtSignal(bool)
 
-    def __init__(self, image_paths, scale_factor, algorithm, im_type):
+    def __init__(self, image_paths, scale_factor, image_handler, im_type):
         super().__init__()
         self.image_paths = image_paths
         self.scale_factor = scale_factor
-        self.Algorithm = algorithm
+        self.ImageHandler = image_handler
         self.im_type = im_type
 
         self.Utilities = Utilities()
@@ -262,14 +266,12 @@ class ScaleImages(qtc.QThread):
     def run(self):
         for path in self.image_paths:
             # Get image memmap
-            np_array = ray.get(
-                self.Algorithm.getImageFromPath.remote(path, self.im_type)
-            )
-
+            np_array = self.ImageHandler.getImageFromPath(path, self.im_type)
+            
             if np_array.any():
                 # Downscale image to scale_factor (percentage) of original
                 scaled = ray.get(
-                    self.Algorithm.downscaleImage.remote(np_array, self.scale_factor)
+                    self.ImageHandler.downscaleImage.remote(np_array, self.scale_factor)
                 )
                 # Convert image to QPixmap and send to UI
                 self.finishedImage.emit(

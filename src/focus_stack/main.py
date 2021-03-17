@@ -50,7 +50,7 @@ class MainWindow(qtw.QMainWindow):
         """
         from src.focus_stack.algorithm import ImageHandler
 
-        self.ImageHandler = ImageHandler.remote()
+        self.ImageHandler = ImageHandler()
 
         from src.focus_stack.utilities import Utilities
 
@@ -600,7 +600,7 @@ class MainWindow(qtw.QMainWindow):
                 "processing", False
             )  # Toggle image processing actions off (no images loaded)
             self.main_layout.image_preview.setImage(None)  # Remove image from preview
-            self.ImageHandler.clearImages.remote()  # Clear all temp files
+            self.ImageHandler.image_storage = {}  # Clear all image memmaps
 
     # Display result message after operation finished
     def result_message(self, returned_table, props):
@@ -700,9 +700,9 @@ class MainLayout(qtw.QWidget):
     image_scale_factor_range = [1, 5]
 
     def __init__(self, parent):
-        super().__init__(parent)
         self.ImageHandler = parent.ImageHandler
         self.Utilities = parent.Utilities
+        super().__init__()
 
         self.list_widget = ImageListWidget(self)
         self.image_preview = ImageViewer(self)
@@ -757,38 +757,6 @@ class MainLayout(qtw.QWidget):
                 item.setData(qtc.Qt.UserRole, path)  # Add full path to data (hidden)
                 widget.addItem(item)  # Add item to list
                 items[path] = item
-            """
-                Load icons procedurally.
-            """
-            # Get random (and original) name
-            orig_name = None
-            while True:
-                orig_name = "".join(
-                    random.choices(string.ascii_uppercase + string.digits, k=10)
-                )
-                if orig_name not in self.downscaling_list:
-                    break  # Name is unique
-
-            # Downscale images to 2% of original
-            self.downscaling_list[orig_name] = QThreads.ScaleImages(
-                image_paths, 2, self.ImageHandler, im_type
-            )
-
-            # Setup icon for an image
-            def setupIcon(ls):
-                # Icon setup
-                path = ls[0]
-                qPixMap = ls[1]
-                item = items[path]
-                item.setIcon(qtg.QIcon(qPixMap))
-
-            # Remove Thread from list on icon finished
-            def cleanup(_):
-                self.downscaling_list[orig_name] = None
-
-            self.downscaling_list[orig_name].finishedImage.connect(setupIcon)
-            self.downscaling_list[orig_name].finished.connect(cleanup)
-            self.downscaling_list[orig_name].start()
         else:
             # Loaded images have been removed --> clear all lists (add default info)
             widget = self.list_widget
@@ -812,11 +780,10 @@ class MainLayout(qtw.QWidget):
     # Update image of QGraphicsView
     def setLoadedImage(self, item, im_type):
         if len(self.image_paths) > 0:  # Check if images have been loaded
-            np_array = ray.get(
-                self.ImageHandler.getImageFromPath.remote(
-                    item.data(qtc.Qt.UserRole), im_type
-                )
+            np_array = self.ImageHandler.getImageFromPath(
+                item.data(qtc.Qt.UserRole), im_type
             )
+
             if np_array.any():
                 qPixMap = self.Utilities.numpyArrayToQPixMap(np_array)
                 if qPixMap:
@@ -858,7 +825,7 @@ class ImageListWidget(qtw.QWidget):
     ]
 
     def __init__(self, parent):
-        super().__init__(parent)
+        super().__init__()
 
         # Loaded images list
         self.loaded_images_list = qtw.QListWidget()
