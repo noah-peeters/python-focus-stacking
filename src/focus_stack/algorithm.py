@@ -12,7 +12,6 @@ import gc
 import sys
 
 
-
 # Setup logging
 log = logging.getLogger(__name__)
 
@@ -41,14 +40,14 @@ class ImageHandler:
             data = remaining_refs
 
             ready_ref = ray.get(ready_ref)  # Get value
-            finished.append(ready_ref[0])   # Add finished image to table
-            update_func(ready_ref[0][0])    # Send loaded image path to UI
+            finished.append(ready_ref[0])  # Add finished image to table
+            update_func(ready_ref[0][0])  # Send loaded image path to UI
 
             process = psutil.Process(os.getpid())
             print(process.memory_info().rss / 10e6)
 
             if not data:
-                break   # All images have been loaded
+                break  # All images have been loaded
 
         # Extract data and write to image_storage
         image_paths = []
@@ -65,7 +64,7 @@ class ImageHandler:
                 "grayscale_source": grayscale_memmap,
                 "image_shape": image_shape,
             }
-        
+
         del finished
 
         return image_paths  # Return loaded images to UI
