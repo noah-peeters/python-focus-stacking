@@ -7,7 +7,6 @@ import numpy as np
 import cv2
 import tempfile
 import ray
-import gc
 
 # Function to load an image. Returns memmaps of images and other useful information
 @ray.remote
@@ -35,10 +34,6 @@ def loadImage(image_path):
         dtype=image_grayscale.dtype,
     )
     grayscale_memmap[:] = image_grayscale
-
-    del image_rgb
-    del image_grayscale
-    gc.collect()
 
     # Return info
     return [image_path, image_shape, rgb_memmap, grayscale_memmap]

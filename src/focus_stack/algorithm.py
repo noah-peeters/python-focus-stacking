@@ -7,10 +7,6 @@ import ray
 from src.focus_stack.utilities import Utilities
 import src.focus_stack.RayFunctions as RayFunctions
 
-import os, psutil
-import sys
-from guppy import hpy
-
 # Setup logging
 log = logging.getLogger(__name__)
 
@@ -41,9 +37,6 @@ class ImageHandler:
             ready_ref = ray.get(ready_ref)  # Get value
             finished.append(ready_ref[0])  # Add finished image to table
             update_func(ready_ref[0][0])  # Send loaded image path to UI
-
-            process = psutil.Process(os.getpid())
-            print(process.memory_info().rss / 10e6)
 
             if not data:
                 break  # All images have been loaded
@@ -212,8 +205,6 @@ class ImageHandler:
 
     # Get image (specified type aka. RGB, grayscale, aligned, ...) from storage
     def getImageFromPath(self, path, im_type):
-        h = hpy()
-        print(h.heap())
         if path in self.image_storage and im_type in self.image_storage[path]:
             return self.image_storage[path][im_type]
 
