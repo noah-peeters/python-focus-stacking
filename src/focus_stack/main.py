@@ -49,9 +49,11 @@ class MainWindow(qtw.QMainWindow):
             Imports
         """
         from src.focus_stack.algorithm import ImageHandler
+
         self.ImageHandler = ImageHandler()
 
         from src.focus_stack.utilities import Utilities
+
         self.Utilities = Utilities()
 
         """
