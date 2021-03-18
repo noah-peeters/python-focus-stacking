@@ -8,10 +8,8 @@ from src.focus_stack.utilities import Utilities
 import src.focus_stack.RayFunctions as RayFunctions
 
 import os, psutil
-import gc
 import sys
-
-
+from guppy import hpy
 
 # Setup logging
 log = logging.getLogger(__name__)
@@ -214,7 +212,8 @@ class ImageHandler:
 
     # Get image (specified type aka. RGB, grayscale, aligned, ...) from storage
     def getImageFromPath(self, path, im_type):
-        print(sys.getsizeof(self.image_storage) / 10e6)
+        h = hpy()
+        print(h.heap())
         if path in self.image_storage and im_type in self.image_storage[path]:
             return self.image_storage[path][im_type]
 
