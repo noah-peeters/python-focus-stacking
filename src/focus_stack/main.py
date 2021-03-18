@@ -596,8 +596,7 @@ class MainWindow(qtw.QMainWindow):
             )  # Toggle image processing actions off (no images loaded)
             self.main_layout.image_preview.setImage(None)  # Remove image from preview
 
-            from src.focus_stack.algorithm import ImageHandler
-            ImageHandler.image_storage = {}  # Clear all image memmaps
+            self.ImageHandler.image_storage = {}  # Clear image_storage
 
     # Display result message after operation finished
     def result_message(self, returned_table, props):

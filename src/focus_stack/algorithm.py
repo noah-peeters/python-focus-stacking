@@ -4,10 +4,16 @@ import tempfile
 from scipy import ndimage
 import logging
 import ray
-
 from src.focus_stack.utilities import Utilities
+import src.focus_stack.RayFunctions as RayFunctions
 
-# Setup log
+import os, psutil
+import gc
+import sys
+
+
+
+# Setup logging
 log = logging.getLogger(__name__)
 
 
@@ -20,39 +26,49 @@ class ImageHandler:
         self.LaplacianPixelAlgorithm = LaplacianPixelAlgorithm(self)
         self.PyramidAlgorithm = PyramidAlgorithm(self)
 
-    # Function to load an image
-    @ray.remote
-    def loadImage(self, image_path):
-        """
-        Load an image in RGB, convert to grayscale and get its shape.
-        """
-        # Load in memory using cv2
-        image_rgb = cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2RGB)
-        image_grayscale = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2GRAY)
-        image_shape = image_rgb.shape
+    # Function to load a list of images in parallel
+    def loadImages(self, image_paths, update_func):
+        # Clear image_storage
+        self.image_storage = {}
 
-        # Write to memmaps
-        rgb_memmap = np.memmap(
-            tempfile.NamedTemporaryFile(),
-            mode="w+",
-            shape=image_shape,
-            dtype=image_rgb.dtype,
-        )
-        rgb_memmap[:] = image_rgb
-        grayscale_memmap = np.memmap(
-            tempfile.NamedTemporaryFile(),
-            mode="w+",
-            shape=(image_shape[0], image_shape[1]),
-            dtype=image_grayscale.dtype,
-        )
-        grayscale_memmap[:] = image_grayscale
+        # Start image loading in parallel
+        data = [RayFunctions.loadImage.remote(path) for path in image_paths]
 
-        # Store memmaps
-        self.image_storage[image_path] = {
-            "rgb_source": rgb_memmap,
-            "grayscale_source": grayscale_memmap,
-            "image_shape": image_shape,
-        }
+        # Run update loop (wait for one item to finish and send update back to UI)
+        finished = []
+        while True:
+            ready_ref, remaining_refs = ray.wait(data, num_returns=1, timeout=None)
+            data = remaining_refs
+
+            ready_ref = ray.get(ready_ref)  # Get value
+            finished.append(ready_ref[0])   # Add finished image to table
+            update_func(ready_ref[0][0])    # Send loaded image path to UI
+
+            process = psutil.Process(os.getpid())
+            print(process.memory_info().rss / 10e6)
+
+            if not data:
+                break   # All images have been loaded
+
+        # Extract data and write to image_storage
+        image_paths = []
+        for info_table in finished:
+            image_path = info_table[0]
+            image_shape = info_table[1]
+            rgb_memmap = info_table[2]
+            grayscale_memmap = info_table[3]
+
+            image_paths.append(image_path)
+
+            self.image_storage[image_path] = {
+                "rgb_source": rgb_memmap,
+                "grayscale_source": grayscale_memmap,
+                "image_shape": image_shape,
+            }
+        
+        del finished
+
+        return image_paths  # Return loaded images to UI
 
     # Align a single image
     @ray.remote
@@ -198,12 +214,11 @@ class ImageHandler:
 
     # Get image (specified type aka. RGB, grayscale, aligned, ...) from storage
     def getImageFromPath(self, path, im_type):
-        print(self.image_storage)
+        print(sys.getsizeof(self.image_storage) / 10e6)
         if path in self.image_storage and im_type in self.image_storage[path]:
             return self.image_storage[path][im_type]
 
     # Downscale an image
-    @ray.remote
     def downscaleImage(self, image, scale_percent):
         new_dim = (
             round(image.shape[1] * scale_percent / 100),

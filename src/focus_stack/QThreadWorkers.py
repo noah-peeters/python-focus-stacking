@@ -10,7 +10,6 @@ import ray
 
 from src.focus_stack.utilities import Utilities
 
-
 # Load images on separate thread
 class LoadImages(qtc.QThread):
     finishedImage = qtc.pyqtSignal(str)
@@ -21,35 +20,22 @@ class LoadImages(qtc.QThread):
 
         self.files = files
         self.is_killed = False
-        self.image_table = []
 
         # Initialize ImageHandler
         self.ImageHandler = image_handler
 
-    def update_ui(self, path):
-        self.image_table.append(path)  # Append loaded image to table
-        self.finishedImage.emit(path)  # Send finished path back to UI
-
     def run(self):
-        # Clear loaded images
-        from src.focus_stack.algorithm import ImageHandler
-
-        ImageHandler.image_storage = {}
-
         start_time = time.time()
 
-        # Start image loading in parallel
-        ray.get(
-            [
-                self.ImageHandler.loadImage.remote(self.ImageHandler, path)
-                for path in self.files
-            ]
-        )
+        def update_func(path):
+            self.finishedImage.emit(path)
+
+        loaded_images = self.ImageHandler.loadImages(self.files, update_func)
 
         self.finished.emit(
             {
                 "execution_time": round(time.time() - start_time, 4),
-                "image_table": self.files,
+                "image_table": loaded_images,
                 "killed_by_user": self.is_killed,
             }
         )
