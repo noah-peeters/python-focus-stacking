@@ -41,7 +41,6 @@ jobs:
           - os: macos-latest
             TARGET: macos
             CMD_BUILD: >
-                cd dist/
                 pyinstaller -F -w -n Python-Focus-Stacking -i snap/gui/pyqt-image-focus-stack.png src/focus_stack/main.py && cd dist/
             OUT_FILE_NAME: focus_stack.zip
             ASSET_MIME: application/zip
