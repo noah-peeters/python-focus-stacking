@@ -42,13 +42,13 @@ jobs:
             TARGET: macos
             CMD_BUILD: >
                 cd dist/
-                pyinstaller src/focus_stack/main.py -n Python-Focus-Stacking
+                pyinstaller -F -w -n Python-Focus-Stacking -i snap/gui/pyqt-image-focus-stack.png src/focus_stack/main.py && cd dist/
             OUT_FILE_NAME: focus_stack.zip
             ASSET_MIME: application/zip
             
           - os: windows-latest
             TARGET: windows
-            CMD_BUILD: pyinstaller src/focus_stack/main.py -n Python-Focus-Stacking
+            CMD_BUILD: pyinstaller -F -w -n Python-Focus-Stacking -i snap/gui/pyqt-image-focus-stack.png src/focus_stack/main.py
             OUT_FILE_NAME: focus_stack.exe
             ASSET_MIME: application/vnd.microsoft.portable-executable
     
