@@ -82,7 +82,7 @@ apps:
       DISABLE_WAYLAND: 1
       # Use GTK3 cursor theme, icon theme and open/save file dialogs.
       QT_QPA_PLATFORMTHEME: gtk3
-    command: desktop-launch $SNAP/bin/QtUi
+    command: desktop-launch $SNAP/bin/focus_stack
     plugs:
       - opengl
       - home

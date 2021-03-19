@@ -3,49 +3,38 @@
    To prevent UI freezing.
 """
 
-import time
+import time, collections
 import PyQt5.QtCore as qtc
-import collections
-from utilities import Utilities
+import ray
 
+from src.focus_stack.utilities import Utilities
 
 # Load images on separate thread
 class LoadImages(qtc.QThread):
     finishedImage = qtc.pyqtSignal(str)
     finished = qtc.pyqtSignal(dict)
 
-    def __init__(self, files, algorithm):
+    def __init__(self, files, image_handler):
         super().__init__()
 
         self.files = files
         self.is_killed = False
 
-        # Initialize algorithm
-        self.Algorithm = algorithm
+        # Initialize ImageHandler
+        self.ImageHandler = image_handler
 
     def run(self):
         start_time = time.time()
-        image_table = []
-        for image_path in self.files:
-            bool = self.Algorithm.loadImage(image_path)
 
-            if not bool:  # Operation failed
-                break
+        def update_func(path):
+            self.finishedImage.emit(path)
 
-            image_table.append(image_path)  # Append loaded image to table
+        loaded_images = self.ImageHandler.loadImages(self.files, update_func)
 
-            if (
-                self.is_killed
-            ):  # Operation stopped from UI (image load still successful)
-                break
-            # Send finished image path back to UI
-            self.finishedImage.emit(image_path)
-
-        # Operation ended
         self.finished.emit(
             {
                 "execution_time": round(time.time() - start_time, 4),
-                "image_table": image_table,
+                "image_table": loaded_images,
                 "killed_by_user": self.is_killed,
             }
         )
@@ -59,31 +48,25 @@ class AlignImages(qtc.QThread):
     finishedImage = qtc.pyqtSignal(list)
     finished = qtc.pyqtSignal(dict)
 
-    def __init__(self, files, parameters, algorithm):
+    def __init__(self, files, parameters, image_handler):
         super().__init__()
 
         self.files = files
         self.parameters = parameters
-        self.Algorithm = algorithm
+        self.ImageHandler = image_handler
         self.is_killed = False
 
     def run(self):
         start_time = time.time()
         image0 = self.files[round(len(self.files) / 2)]  # Get middle image
-        aligned_images = (
-            []
-        )  # Table for processed images (to check if all have been loaded)
-        for image_path in self.files:
-            image0, image1, success = self.Algorithm.alignImage(
-                image0, image_path, self.parameters
-            )
 
-            if not success or self.is_killed:  # Operation failed or stopped from UI
-                break
+        def update_func(path):
+            self.finishedImage.emit([path, image0])
 
-            aligned_images.append(image_path)  # Append aligned image
-            # Send progress back to UI
-            self.finishedImage.emit([image0, image1])
+        self.parameters["image0"] = image0
+        aligned_images = self.ImageHandler.alignImages(
+            self.files, self.parameters, update_func
+        )
 
         # Operation ended
         self.finished.emit(
@@ -202,6 +185,7 @@ class FinalStacking_Laplacian(qtc.QThread):
     def kill(self):
         self.is_killed = True
 
+
 class PyramidStacking(qtc.QThread):
     finished = qtc.pyqtSignal(dict)
 
@@ -234,28 +218,33 @@ class PyramidStacking(qtc.QThread):
     def kill(self):
         self.is_killed = True
 
+
 # (Down)scale images on a separate thread.
 class ScaleImages(qtc.QThread):
     finishedImage = qtc.pyqtSignal(list)
     finished = qtc.pyqtSignal(bool)
 
-    def __init__(self, image_paths, scale_factor, algorithm, im_type):
+    def __init__(self, image_paths, scale_factor, image_handler, im_type):
         super().__init__()
         self.image_paths = image_paths
         self.scale_factor = scale_factor
-        self.Algorithm = algorithm
+        self.ImageHandler = image_handler
         self.im_type = im_type
 
         self.Utilities = Utilities()
 
     def run(self):
         for path in self.image_paths:
-            np_array = self.Algorithm.getImageFromPath(path, self.im_type)  # Get image
+            # Get image memmap
+            np_array = self.ImageHandler.getImageFromPath(path, self.im_type)
+
             if np_array.any():
-                scaled = self.Algorithm.downscaleImage(
-                    np_array, self.scale_factor
-                )  # Downscale image to scale_factor (percentage) of original
+                # Downscale image to scale_factor (percentage) of original
+                scaled = ray.get(
+                    self.ImageHandler.downscaleImage.remote(np_array, self.scale_factor)
+                )
+                # Convert image to QPixmap and send to UI
                 self.finishedImage.emit(
                     [path, self.Utilities.numpyArrayToQPixMap(scaled)]
-                )  # Convert image to QPixmap
+                )
         self.finished.emit(True)

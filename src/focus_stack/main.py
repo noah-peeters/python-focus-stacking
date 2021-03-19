@@ -1,15 +1,37 @@
-import sys
-import collections
+import logging, os, sys, collections
 from pathlib import Path
-import os
 import PyQt5.QtWidgets as qtw
 import PyQt5.QtCore as qtc
 import PyQt5.QtGui as qtg
-import random
-import string
+import ray
 
-import QThreadWorkers as QThreads
-import ParametersPopUp as ParametersPopUp
+# Initialize ray
+ray.init()
+
+# Setup logging
+class OneLineExceptionFormatter(logging.Formatter):
+    def formatException(self, exc_info):
+        result = super().formatException(exc_info)
+        return repr(result)
+
+    def format(self, record):
+        result = super().format(record)
+        if record.exc_text:
+            result = result.replace("\n", "")
+        return result
+
+
+handler = logging.StreamHandler()
+formatter = OneLineExceptionFormatter(logging.BASIC_FORMAT)
+handler.setFormatter(formatter)
+root = logging.getLogger()
+root.setLevel(os.environ.get("LOGLEVEL", "DEBUG"))
+root.addHandler(handler)
+
+log = logging.getLogger(__name__)
+
+import src.focus_stack.QThreadWorkers as QThreads
+import src.focus_stack.ParametersPopUp as ParametersPopUp
 
 SUPPORTED_IMAGE_FORMATS = "(*.jpg *.png)"
 
@@ -22,11 +44,11 @@ class MainWindow(qtw.QMainWindow):
         """
             Imports
         """
-        from algorithm import ImageHandler
+        from src.focus_stack.algorithm import ImageHandler
 
         self.ImageHandler = ImageHandler()
 
-        from utilities import Utilities
+        from src.focus_stack.utilities import Utilities
 
         self.Utilities = Utilities()
 
@@ -256,15 +278,14 @@ class MainWindow(qtw.QMainWindow):
             # Update progress slider
             image_progress.setValue(counter)
 
-        loading = QThreads.LoadImages(self.loaded_image_files, self.ImageHandler)
-        loading.finishedImage.connect(update_progress)  # Update progress callback
+        self.loading = QThreads.LoadImages(self.loaded_image_files, self.ImageHandler)
+        self.loading.finishedImage.connect(update_progress)  # Update progress callback
 
         def finished_loading(returned):
             self.loaded_image_files = returned["image_table"]  # Set loaded images
             # Update listing of loaded images
             self.main_layout.set_image_list(
                 self.loaded_image_files,
-                "source",
                 self.main_layout.list_widget.loaded_images_list,
             )
 
@@ -281,10 +302,12 @@ class MainWindow(qtw.QMainWindow):
             props["success_message"].setStandardButtons(qtw.QMessageBox.Ok)
             self.result_message(returned, props)  # Display message about operation
 
-        loading.finished.connect(finished_loading)  # Connection on finished
+        self.loading.finished.connect(finished_loading)  # Connection on finished
 
-        image_progress.canceled.connect(loading.kill)  # Stop image loading on cancel
-        loading.start()
+        image_progress.canceled.connect(
+            self.loading.kill
+        )  # Stop image loading on cancel
+        self.loading.start()
 
         image_progress.exec_()
 
@@ -321,17 +344,10 @@ class MainWindow(qtw.QMainWindow):
                 # Update progress slider
                 align_progress.setValue(counter)
 
-            aligning = QThreads.AlignImages(
-                self.loaded_image_files, parameters, self.ImageHandler
-            )
-            aligning.finishedImage.connect(update_progress)
-
             def finished_loading(returned):
                 # Add aligned images to processing list widget
                 widget = self.main_layout.list_widget.aligned_images_list
-                self.main_layout.set_image_list(
-                    returned["image_table"], "aligned", widget
-                )
+                self.main_layout.set_image_list(returned["image_table"], widget)
 
                 # Create pop-up on operation finish.
                 props = {}
@@ -346,12 +362,16 @@ class MainWindow(qtw.QMainWindow):
                 props["success_message"].setStandardButtons(qtw.QMessageBox.Ok)
                 self.result_message(returned, props)
 
-            aligning.finished.connect(finished_loading)
+            self.aligning = QThreads.AlignImages(
+                self.loaded_image_files, parameters, self.ImageHandler
+            )
+            self.aligning.finishedImage.connect(update_progress)
+            self.aligning.finished.connect(finished_loading)
             align_progress.canceled.connect(
-                aligning.kill
+                self.aligning.kill
             )  # Kill operation on "cancel" press
 
-            aligning.start()
+            self.aligning.start()
             align_progress.exec_()
 
         # Settings popup for image alignment
@@ -402,10 +422,10 @@ class MainWindow(qtw.QMainWindow):
                         self.main_layout.list_widget.laplacian_images_list
                     )
                     self.main_layout.set_image_list(
-                        returned["image_table"], "gaussian", blurred_widget
+                        returned["image_table"], blurred_widget
                     )
                     self.main_layout.set_image_list(
-                        returned["image_table"], "laplacian", laplacian_widget
+                        returned["image_table"], laplacian_widget
                     )
 
                     props = {}
@@ -468,7 +488,7 @@ class MainWindow(qtw.QMainWindow):
                         # Add stacked image to processing list widget
                         stacked_widget = self.main_layout.list_widget.stacked_image_list
                         self.main_layout.set_image_list(
-                            returned["image_table"], "stacked", stacked_widget
+                            returned["image_table"], stacked_widget
                         )
 
                         props = {}
@@ -498,14 +518,15 @@ class MainWindow(qtw.QMainWindow):
                 self.laplacian_calc.start()
                 laplacian_progress.exec_()
             elif stacking_mode == "pyramid":
-                print("pyramid stacking")
-                self.pyramid_calc = QThreads.PyramidStacking(self.loaded_image_files, parameters, self.ImageHandler)
+                self.pyramid_calc = QThreads.PyramidStacking(
+                    self.loaded_image_files, parameters, self.ImageHandler
+                )
 
                 def pyramid_finished(returned):
                     # Add stacked image to processing list widget
                     stacked_widget = self.main_layout.list_widget.stacked_image_list
                     self.main_layout.set_image_list(
-                        returned["image_table"], "stacked", stacked_widget
+                        returned["image_table"], stacked_widget
                     )
 
                 self.pyramid_calc.finished.connect(pyramid_finished)
@@ -571,7 +592,8 @@ class MainWindow(qtw.QMainWindow):
                 "processing", False
             )  # Toggle image processing actions off (no images loaded)
             self.main_layout.image_preview.setImage(None)  # Remove image from preview
-            self.ImageHandler.clearTempFiles()  # Clear all temp files
+
+            self.ImageHandler.clearImages()  # Clear images
 
     # Display result message after operation finished
     def result_message(self, returned_table, props):
@@ -671,9 +693,10 @@ class MainLayout(qtw.QWidget):
     image_scale_factor_range = [1, 5]
 
     def __init__(self, parent):
-        super().__init__(parent)
-        self.ImageHandler = parent.ImageHandler
+        self.Parent = parent
         self.Utilities = parent.Utilities
+
+        super().__init__()
 
         self.list_widget = ImageListWidget(self)
         self.image_preview = ImageViewer(self)
@@ -683,16 +706,16 @@ class MainLayout(qtw.QWidget):
 
         # List widget clicked connections
         self.list_widget.loaded_images_list.itemClicked.connect(
-            lambda item: self.setLoadedImage(item, "source")
+            lambda item: self.setLoadedImage(item, "rgb_source")
         )  # Loaded images --> display RGB preview
         self.list_widget.aligned_images_list.itemClicked.connect(
-            lambda item: self.setLoadedImage(item, "aligned")
+            lambda item: self.setLoadedImage(item, "rgb_aligned")
         )  # Aligned images --> display RGB preview
         self.list_widget.gaussian_blurred_images_list.itemClicked.connect(
-            lambda item: self.setLoadedImage(item, "gaussian")
+            lambda item: self.setLoadedImage(item, "grayscale_gaussian")
         )  # Gaussian blurred images --> display RGB preview
         self.list_widget.laplacian_images_list.itemClicked.connect(
-            lambda item: self.setLoadedImage(item, "laplacian")
+            lambda item: self.setLoadedImage(item, "grayscale_laplacian")
         )  # Laplacian images --> display grayscale preview (float 64)
         self.list_widget.stacked_image_list.itemClicked.connect(
             lambda item: self.setLoadedImage(item, "stacked")
@@ -715,7 +738,7 @@ class MainLayout(qtw.QWidget):
         )  # Reset zoom on new image lad, file menu connection
 
     # Update list of loaded images
-    def set_image_list(self, image_paths, im_type=None, widget=None):
+    def set_image_list(self, image_paths, widget=None):
         self.image_paths = image_paths
 
         if len(self.image_paths) > 0 and widget:  # Images loaded, display their names.
@@ -728,38 +751,6 @@ class MainLayout(qtw.QWidget):
                 item.setData(qtc.Qt.UserRole, path)  # Add full path to data (hidden)
                 widget.addItem(item)  # Add item to list
                 items[path] = item
-            """
-                Load icons procedurally.
-            """
-            # Get random (and original) name
-            orig_name = None
-            while True:
-                orig_name = "".join(
-                    random.choices(string.ascii_uppercase + string.digits, k=10)
-                )
-                if orig_name not in self.downscaling_list:
-                    break  # Name is unique
-
-            # Downscale images to 2% of original
-            self.downscaling_list[orig_name] = QThreads.ScaleImages(
-                image_paths, 2, self.ImageHandler, im_type
-            )
-
-            # Setup icon for an image
-            def setupIcon(ls):
-                # Icon setup
-                path = ls[0]
-                qPixMap = ls[1]
-                item = items[path]
-                item.setIcon(qtg.QIcon(qPixMap))
-
-            # Remove Thread from list on icon finished
-            def cleanup(_):
-                self.downscaling_list[orig_name] = None
-
-            self.downscaling_list[orig_name].finishedImage.connect(setupIcon)
-            self.downscaling_list[orig_name].finished.connect(cleanup)
-            self.downscaling_list[orig_name].start()
         else:
             # Loaded images have been removed --> clear all lists (add default info)
             widget = self.list_widget
@@ -783,9 +774,10 @@ class MainLayout(qtw.QWidget):
     # Update image of QGraphicsView
     def setLoadedImage(self, item, im_type):
         if len(self.image_paths) > 0:  # Check if images have been loaded
-            np_array = self.ImageHandler.getImageFromPath(
+            np_array = self.Parent.ImageHandler.getImageFromPath(
                 item.data(qtc.Qt.UserRole), im_type
             )
+
             if np_array.any():
                 qPixMap = self.Utilities.numpyArrayToQPixMap(np_array)
                 if qPixMap:
@@ -827,7 +819,7 @@ class ImageListWidget(qtw.QWidget):
     ]
 
     def __init__(self, parent):
-        super().__init__(parent)
+        super().__init__()
 
         # Loaded images list
         self.loaded_images_list = qtw.QListWidget()
