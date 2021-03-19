@@ -41,20 +41,20 @@ class ImageHandler:
             if not data:
                 break  # All images have been loaded
 
-        # Extract data and write to image_storage
+        # Extract data and place references to files inside image_storage
         image_paths = []
         for info_table in finished:
             image_path = info_table[0]
             image_shape = info_table[1]
-            rgb_memmap = info_table[2]
-            grayscale_memmap = info_table[3]
+            rgb_file = info_table[2]
+            grayscale_file = info_table[3]
 
             image_paths.append(image_path)
 
             self.image_storage[image_path] = {
-                "rgb_source": rgb_memmap,
-                "grayscale_source": grayscale_memmap,
                 "image_shape": image_shape,
+                "rgb_source": rgb_file,
+                "grayscale_source": grayscale_file,
             }
 
         del finished
@@ -205,8 +205,34 @@ class ImageHandler:
 
     # Get image (specified type aka. RGB, grayscale, aligned, ...) from storage
     def getImageFromPath(self, path, im_type):
-        if path in self.image_storage and im_type in self.image_storage[path]:
-            return self.image_storage[path][im_type]
+        if path in self.image_storage:
+            im_root = self.image_storage[path]
+            if im_type == "source":
+                im = im_root["rgb_source"]
+                return np.memmap(im, mode="r", shape=im["image_shape"])
+
+            elif im_type == "aligned" and "rgb_aligned" in im_root:
+                im = im_root["rgb_aligned"]
+                return np.memmap(im, mode="r", shape=im["image_shape"])
+
+            elif im_type == "gaussian" and "gaussian" in im_root:
+                im = im_root["gaussian"]
+                return np.memmap(
+                    im, mode="r", shape=im["image_shape"]
+                )
+
+            elif im_type == "laplacian" and "laplacian" in im_root:
+                im = im_root["laplacian"]
+                return np.memmap(
+                    im,
+                    mode="r",
+                    shape=im["image_shape"],
+                    dtype="float64",
+                )
+
+        elif im_type == "stacked" and "stacked image" in self.image_storage:
+            im = self.image_storage["stacked"]
+            return np.memmap(im, mode="r", shape=im["image_shape"])
 
     # Downscale an image
     def downscaleImage(self, image, scale_percent):
