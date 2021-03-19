@@ -49,7 +49,7 @@ jobs:
             
           - os: windows-latest
             TARGET: windows
-            CMD_BUILD: pyinstaller -F -w -n Python-Focus-Stacking src/focus_stack/main.py
+            CMD_BUILD: pyinstaller -F -w -n focus_stack src/focus_stack/main.py
             OUT_FILE_NAME: focus_stack.exe
             ASSET_MIME: application/vnd.microsoft.portable-executable
     
@@ -87,6 +87,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.get_release_info.outputs.upload_url }}
-        asset_path: ${{ matrix.OUT_FILE_NAME}}
+        asset_path: ./dist/${{ matrix.OUT_FILE_NAME}}
         asset_name: ${{ matrix.OUT_FILE_NAME }}
         asset_content_type: ${{ matrix.ASSET_MIME }}
