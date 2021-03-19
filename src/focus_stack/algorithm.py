@@ -4,6 +4,8 @@ import tempfile
 from scipy import ndimage
 import logging
 import ray
+import tempfile
+
 from src.focus_stack.utilities import Utilities
 import src.focus_stack.RayFunctions as RayFunctions
 
@@ -14,11 +16,15 @@ log = logging.getLogger(__name__)
 class ImageHandler:
     image_storage = {}
     image_shape = []
+    temp_dir_path = None
 
     def __init__(self):
         # Initialize algorithms
         self.LaplacianPixelAlgorithm = LaplacianPixelAlgorithm(self)
         self.PyramidAlgorithm = PyramidAlgorithm(self)
+
+        # Create tempdirectory (for storing all image data)
+        self.temp_dir_path = tempfile.mkdtemp(suffix="ptyhon_focus_stacking")
 
     # Function to load a list of images in parallel
     def loadImages(self, image_paths, update_func):
@@ -26,7 +32,7 @@ class ImageHandler:
         self.image_storage = {}
 
         # Start image loading in parallel
-        data = [RayFunctions.loadImage.remote(path) for path in image_paths]
+        data = [RayFunctions.loadImage.remote(path, self.temp_dir_path) for path in image_paths]
 
         # Run update loop (wait for one item to finish and send update back to UI)
         finished = []
@@ -46,15 +52,15 @@ class ImageHandler:
         for info_table in finished:
             image_path = info_table[0]
             image_shape = info_table[1]
-            rgb_file = info_table[2]
-            grayscale_file = info_table[3]
+            rgb_file_name = info_table[2]
+            grayscale_file_name = info_table[3]
 
             image_paths.append(image_path)
 
             self.image_storage[image_path] = {
                 "image_shape": image_shape,
-                "rgb_source": rgb_file,
-                "grayscale_source": grayscale_file,
+                "rgb_source": rgb_file_name,
+                "grayscale_source": grayscale_file_name,
             }
 
         del finished
@@ -207,24 +213,20 @@ class ImageHandler:
     def getImageFromPath(self, path, im_type):
         if path in self.image_storage:
             im_root = self.image_storage[path]
-            if im_type == "source":
-                im = im_root["rgb_source"]
-                return np.memmap(im, mode="r", shape=im["image_shape"])
+            if im_type == "rgb_source" and im_type in im_root:
+                return np.memmap(im_root[im_type], mode="r", shape=im_root["image_shape"])
 
-            elif im_type == "aligned" and "rgb_aligned" in im_root:
-                im = im_root["rgb_aligned"]
-                return np.memmap(im, mode="r", shape=im["image_shape"])
+            elif im_type == "rgb_aligned" and im_type in im_root:
+                return np.memmap(im_root[im_type], mode="r", shape=im_root["image_shape"])
 
-            elif im_type == "gaussian" and "gaussian" in im_root:
-                im = im_root["gaussian"]
-                return np.memmap(im, mode="r", shape=im["image_shape"])
+            elif im_type == "grayscale_gaussian" and im_type in im_root:
+                return np.memmap(im_root[im_type], mode="r", shape=im_root["image_shape"])
 
-            elif im_type == "laplacian" and "laplacian" in im_root:
-                im = im_root["laplacian"]
+            elif im_type == "grayscale_laplacian" and im_type in im_root:
                 return np.memmap(
-                    im,
+                    im_root[im_type],
                     mode="r",
-                    shape=im["image_shape"],
+                    shape=im_root["image_shape"],
                     dtype="float64",
                 )
 

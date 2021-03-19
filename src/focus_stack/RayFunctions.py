@@ -7,11 +7,10 @@ import numpy as np
 import cv2
 import tempfile
 import ray
-import gc
 
 # Function to load an image. Returns memmaps of images and other useful information
 @ray.remote
-def loadImage(image_path):
+def loadImage(image_path, dir):
     """
     Load an image in RGB, convert to grayscale and get its shape.
     """
@@ -21,7 +20,7 @@ def loadImage(image_path):
     image_shape = image_rgb.shape
 
     # Write to memmaps
-    rgb_name = tempfile.NamedTemporaryFile()
+    rgb_handle, rgb_name = tempfile.mkstemp(suffix=".rgb_source", dir=dir)
     rgb_memmap = np.memmap(
         rgb_name,
         mode="w+",
@@ -30,7 +29,9 @@ def loadImage(image_path):
     )
     rgb_memmap[:] = image_rgb
 
-    grayscale_name = tempfile.NamedTemporaryFile()
+    grayscale_handle, grayscale_name = tempfile.mkstemp(
+        suffix=".grayscale_source", dir=dir
+    )
     grayscale_memmap = np.memmap(
         grayscale_name,
         mode="w+",
@@ -38,12 +39,6 @@ def loadImage(image_path):
         dtype=image_grayscale.dtype,
     )
     grayscale_memmap[:] = image_grayscale
-
-    del image_rgb
-    del image_grayscale
-    del rgb_memmap
-    del grayscale_memmap
-    gc.collect()
 
     # Return info
     return [image_path, image_shape, rgb_name, grayscale_name]
