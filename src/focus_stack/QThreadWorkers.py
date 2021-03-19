@@ -64,7 +64,9 @@ class AlignImages(qtc.QThread):
             self.finishedImage.emit([path, image0])
 
         self.parameters["image0"] = image0
-        aligned_images = self.ImageHandler.alignImages(self.files, self.parameters, update_func)
+        aligned_images = self.ImageHandler.alignImages(
+            self.files, self.parameters, update_func
+        )
 
         # Operation ended
         self.finished.emit(

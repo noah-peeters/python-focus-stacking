@@ -44,8 +44,8 @@ class ImageHandler:
             data = remaining_refs
 
             ready_ref = ray.get(ready_ref)  # Get value
-            finished.append(ready_ref[0])   # Add finished image to table
-            update_func(ready_ref[0][0])    # Send loaded image path to UI
+            finished.append(ready_ref[0])  # Add finished image to table
+            update_func(ready_ref[0][0])  # Send loaded image path to UI
 
             if not data:
                 break  # All images have been loaded
@@ -73,7 +73,9 @@ class ImageHandler:
     # Align a list of images in parallel
     def alignImages(self, image_paths, parameters, update_func):
         data = [
-            RayFunctions.alignImage.remote(path, parameters, self.image_storage, self.temp_dir_path)
+            RayFunctions.alignImage.remote(
+                path, parameters, self.image_storage, self.temp_dir_path
+            )
             for path in image_paths
         ]
 
@@ -84,8 +86,8 @@ class ImageHandler:
             data = remaining_refs
 
             ready_ref = ray.get(ready_ref)  # Get value
-            finished.append(ready_ref[0])   # Add finished image to table
-            update_func(ready_ref[0][0])    # Send loaded image path to UI
+            finished.append(ready_ref[0])  # Add finished image to table
+            update_func(ready_ref[0][0])  # Send loaded image path to UI
 
             if not data:
                 break  # All images have been aligned
