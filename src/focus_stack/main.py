@@ -1,18 +1,12 @@
-import sys
-import collections
+import logging, os, sys, collections
 from pathlib import Path
-import os
 import PyQt5.QtWidgets as qtw
 import PyQt5.QtCore as qtc
 import PyQt5.QtGui as qtg
-import random
-import string
-import logging
 import ray
-import psutil
 
 # Initialize ray
-ray.init(num_cpus=psutil.cpu_count(logical=False))
+ray.init()
 
 # Setup logging
 class OneLineExceptionFormatter(logging.Formatter):
@@ -33,6 +27,8 @@ handler.setFormatter(formatter)
 root = logging.getLogger()
 root.setLevel(os.environ.get("LOGLEVEL", "DEBUG"))
 root.addHandler(handler)
+
+log = logging.getLogger(__name__)
 
 import src.focus_stack.QThreadWorkers as QThreads
 import src.focus_stack.ParametersPopUp as ParametersPopUp
@@ -598,7 +594,7 @@ class MainWindow(qtw.QMainWindow):
             )  # Toggle image processing actions off (no images loaded)
             self.main_layout.image_preview.setImage(None)  # Remove image from preview
 
-            self.ImageHandler.image_storage = {}  # Clear image_storage
+            self.ImageHandler.clearImages()  # Clear images
 
     # Display result message after operation finished
     def result_message(self, returned_table, props):

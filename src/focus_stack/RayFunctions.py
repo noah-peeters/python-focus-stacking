@@ -3,9 +3,9 @@
     These can be parallellized with Ray.
 """
 
+import tempfile
 import numpy as np
 import cv2
-import tempfile
 import ray
 
 # Function to load an image. Returns memmaps of images and other useful information

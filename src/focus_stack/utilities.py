@@ -1,10 +1,7 @@
+import psutil, os, ntpath
 import PyQt5.QtGui as qtg
 from datetime import timedelta
-import ntpath
-import os
 import qimage2ndarray
-import psutil
-import gc
 
 
 class Utilities:
@@ -61,14 +58,3 @@ class Utilities:
 
             if qImage:
                 return qtg.QPixmap(qImage)
-
-    # Garbage collect if memory is above percentage
-    def autoGarbageCollect(pct=80.0):
-        """
-        Call the garbage collection if memory used is greater than X% of total available memory.
-        This is called to deal with an issue in Ray not freeing up used memory.
-        """
-        if psutil.virtual_memory().percent >= pct:
-            print("Collect garbage")
-            gc.collect()
-        return

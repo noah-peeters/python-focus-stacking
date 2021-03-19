@@ -1,11 +1,8 @@
+import shutil, atexit, os, tempfile, logging
 import numpy as np
 import cv2
-import tempfile
 from scipy import ndimage
-import logging
 import ray
-import tempfile
-import os
 
 from src.focus_stack.utilities import Utilities
 import src.focus_stack.RayFunctions as RayFunctions
@@ -26,6 +23,8 @@ class ImageHandler:
 
         # Create tempdirectory (for storing all image data)
         self.temp_dir_path = tempfile.mkdtemp(prefix="ptyhon_focus_stacking_")
+        # Remove folder on program exit
+        atexit.register(self.deleteTempFolder)
 
     # Function to load a list of images in parallel
     def loadImages(self, image_paths, update_func):
@@ -72,7 +71,6 @@ class ImageHandler:
         return image_paths  # Return loaded images to UI
 
     # Align a single image
-    @ray.remote
     def alignImage(self, im1_path, im2_path, parameters):
         # Checks
         if not im1_path in self.image_storage:
@@ -251,6 +249,24 @@ class ImageHandler:
             round(image.shape[0] * scale_percent / 100),
         )  # New width and height
         return cv2.resize(image, new_dim, interpolation=cv2.INTER_AREA)
+    
+    def deleteTempFolder(self):
+        log.info("Removing tempfile directory")
+        shutil.rmtree(self.temp_dir_path)
+    
+    def clearImages(self):
+        self.image_storage = {}
+        # Remove all tempfiles inside directory
+        folder = self.temp_dir_path
+        for filename in os.listdir(folder):
+            file_path = os.path.join(folder, filename)
+            try:
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    os.unlink(file_path)
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)
+            except Exception as e:
+                print('Failed to delete %s. Reason: %s' % (file_path, e))
 
 
 class LaplacianPixelAlgorithm:

@@ -3,9 +3,8 @@
    To prevent UI freezing.
 """
 
-import time
+import time, collections
 import PyQt5.QtCore as qtc
-import collections
 import ray
 
 from src.focus_stack.utilities import Utilities
