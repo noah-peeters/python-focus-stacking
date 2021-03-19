@@ -42,10 +42,14 @@ jobs:
             TARGET: macos
             CMD_BUILD: >
                 pyinstaller src/focus_stack/main.py -n Python-Focus-Stacking
+            OUT_FILE_NAME: Python-Focus-Stacking.zip
+            ASSET_MIME: application/zip
             
           - os: windows-latest
             TARGET: windows
             CMD_BUILD: pyinstaller src/focus_stack/main.py -n Python-Focus-Stacking
+            OUT_FILE_NAME: Python-Focus-Stacking.exe
+            ASSET_MIME: application/vnd.microsoft.portable-executable
     
     steps:
     - uses: actions/checkout@v2
@@ -82,3 +86,5 @@ jobs:
       with:
         upload_url: ${{ steps.get_release_info.outputs.upload_url }}
         asset_path: ./dist/${{ matrix.OUT_FILE_NAME}}
+        asset_name: ${{ matrix.OUT_FILE_NAME }}
+        asset_content_type: ${{ matrix.ASSET_MIME }}
