@@ -33,7 +33,10 @@ class ImageHandler:
         self.image_storage = {}
 
         # Start image loading in parallel
-        data = [RayFunctions.loadImage.remote(path, self.temp_dir_path) for path in image_paths]
+        data = [
+            RayFunctions.loadImage.remote(path, self.temp_dir_path)
+            for path in image_paths
+        ]
 
         # Run update loop (wait for one item to finish and send update back to UI)
         finished = []
@@ -215,13 +218,19 @@ class ImageHandler:
         if path in self.image_storage:
             im_root = self.image_storage[path]
             if im_type == "rgb_source" and im_type in im_root:
-                return np.memmap(im_root[im_type], mode="r", shape=im_root["image_shape"])
+                return np.memmap(
+                    im_root[im_type], mode="r", shape=im_root["image_shape"]
+                )
 
             elif im_type == "rgb_aligned" and im_type in im_root:
-                return np.memmap(im_root[im_type], mode="r", shape=im_root["image_shape"])
+                return np.memmap(
+                    im_root[im_type], mode="r", shape=im_root["image_shape"]
+                )
 
             elif im_type == "grayscale_gaussian" and im_type in im_root:
-                return np.memmap(im_root[im_type], mode="r", shape=im_root["image_shape"])
+                return np.memmap(
+                    im_root[im_type], mode="r", shape=im_root["image_shape"]
+                )
 
             elif im_type == "grayscale_laplacian" and im_type in im_root:
                 return np.memmap(
