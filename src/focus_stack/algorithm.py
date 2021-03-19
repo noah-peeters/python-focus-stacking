@@ -249,11 +249,11 @@ class ImageHandler:
             round(image.shape[0] * scale_percent / 100),
         )  # New width and height
         return cv2.resize(image, new_dim, interpolation=cv2.INTER_AREA)
-    
+
     def deleteTempFolder(self):
         log.info("Removing tempfile directory")
         shutil.rmtree(self.temp_dir_path)
-    
+
     def clearImages(self):
         self.image_storage = {}
         # Remove all tempfiles inside directory
@@ -266,7 +266,7 @@ class ImageHandler:
                 elif os.path.isdir(file_path):
                     shutil.rmtree(file_path)
             except Exception as e:
-                print('Failed to delete %s. Reason: %s' % (file_path, e))
+                print("Failed to delete %s. Reason: %s" % (file_path, e))
 
 
 class LaplacianPixelAlgorithm:
