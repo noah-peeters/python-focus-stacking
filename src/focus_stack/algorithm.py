@@ -26,7 +26,7 @@ class ImageHandler:
         # Remove folder on program exit
         atexit.register(self.deleteTempFolder)
 
-    # Function to load a list of images in parallel
+    # Load a list of images in parallel
     def loadImages(self, image_paths, update_func):
         # Clear image_storage
         self.image_storage = {}
@@ -44,8 +44,8 @@ class ImageHandler:
             data = remaining_refs
 
             ready_ref = ray.get(ready_ref)  # Get value
-            finished.append(ready_ref[0])  # Add finished image to table
-            update_func(ready_ref[0][0])  # Send loaded image path to UI
+            finished.append(ready_ref[0])   # Add finished image to table
+            update_func(ready_ref[0][0])    # Send loaded image path to UI
 
             if not data:
                 break  # All images have been loaded
@@ -70,131 +70,36 @@ class ImageHandler:
 
         return image_paths  # Return loaded images to UI
 
-    # Align a single image
-    def alignImage(self, im1_path, im2_path, parameters):
-        # Checks
-        if not im1_path in self.image_storage:
-            return
-        elif not im2_path in self.image_storage:
-            return
-        elif not "grayscale_source" in self.image_storage[im1_path]:
-            return
-        elif not "grayscale_source" in self.image_storage[im2_path]:
-            return
-        elif not "rgb_source" in self.image_storage[im2_path]:
-            return
-        elif not "image_shape" in self.image_storage[im2_path]:
-            return
+    # Align a list of images in parallel
+    def alignImages(self, image_paths, parameters, update_func):
+        data = [
+            RayFunctions.alignImage.remote(path, parameters, self.image_storage, self.temp_dir_path)
+            for path in image_paths
+        ]
 
-        # Shorthands
-        im2_storage = self.image_storage[im2_path]
-        shape = im2_storage["image_shape"]
+        # Run update loop (wait for one item to finish and send update back to UI)
+        finished = []
+        while True:
+            ready_ref, remaining_refs = ray.wait(data, num_returns=1, timeout=None)
+            data = remaining_refs
 
-        # Get memmap's
-        im1_gray = self.image_storage[im1_path]["grayscale_source"]
-        im2_gray = im2_storage["grayscale_source"]
-        im2_rgb = im2_storage["rgb_source"]
+            ready_ref = ray.get(ready_ref)  # Get value
+            finished.append(ready_ref[0])   # Add finished image to table
+            update_func(ready_ref[0][0])    # Send loaded image path to UI
 
-        # Get motion model from parameters
-        mode = parameters["WarpMode"]
-        if mode == "Translation":
-            warp_mode = cv2.MOTION_TRANSLATION
-        elif mode == "Affine":
-            warp_mode = cv2.MOTION_AFFINE
-        elif mode == "Euclidean":
-            warp_mode = cv2.MOTION_EUCLIDEAN
-        elif mode == "Homography":
-            warp_mode = cv2.MOTION_HOMOGRAPHY
+            if not data:
+                break  # All images have been aligned
 
-        # Define 2x3 or 3x3 warp matrix
-        if warp_mode == cv2.MOTION_HOMOGRAPHY:
-            warp_matrix = np.eye(3, 3, dtype=np.float32)
-        else:
-            warp_matrix = np.eye(2, 3, dtype=np.float32)
+        # Extract data and place references to files inside image_storage
+        image_paths = []
+        for info_table in finished:
+            image_path = info_table[0]
 
-        # Get number of iterations
-        number_of_iterations = 5000
-        if parameters["NumberOfIterations"]:
-            number_of_iterations = parameters["NumberOfIterations"]
-
-        # Get termination epsilon
-        termination_eps = 1e-8
-        if parameters["TerminationEpsilon"]:
-            termination_eps = 1 * 10 ** (-parameters["TerminationEpsilon"])
-
-        # Define termination criteria
-        criteria = (
-            cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT,
-            number_of_iterations,
-            termination_eps,
-        )
-
-        # Get gaussian blur size
-        gaussian_blur_size = 5
-        if parameters["GaussianBlur"]:
-            gaussian_blur_size = parameters["GaussianBlur"]
-
-        # Run the algorithm
-        _, warp_matrix = cv2.findTransformECC(
-            im1_gray,
-            im2_gray,
-            warp_matrix,
-            warp_mode,
-            criteria,
-            None,
-            gaussian_blur_size,
-        )
-        del im1_gray
-
-        if warp_mode == cv2.MOTION_HOMOGRAPHY:  # Use warpPerspective for Homography
-            # Align RGB
-            im2_aligned = cv2.warpPerspective(
-                im2_rgb,
-                warp_matrix,
-                (self.image_shape[1], self.image_shape[0]),
-                flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP,
-            )
-            # Align grayscale
-            im2_grayscale_aligned = cv2.warpPerspective(
-                im2_gray,
-                warp_matrix,
-                (self.image_shape[1], self.image_shape[0]),
-                flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP,
-            )
-
-        else:  # Use warpAffine for Translation, Euclidean and Affine
-            # Align RGB
-            im2_aligned = cv2.warpAffine(
-                im2_rgb,
-                warp_matrix,
-                (self.image_shape[1], self.image_shape[0]),
-                flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP,
-            )
-            # Align grayscale
-            im2_grayscale_aligned = cv2.warpAffine(
-                im2_gray,
-                warp_matrix,
-                (self.image_shape[1], self.image_shape[0]),
-                flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP,
-            )
-
-        # Store aligned grayscale image in new memmap
-        im2_storage["grayscale_aligned"] = np.memmap(
-            tempfile.NamedTemporaryFile(), mode="w+", shape=(shape[0], shape[1])
-        )
-        im2_storage["grayscale_aligned"][:] = im2_grayscale_aligned
-
-        # Store aligned RGB image in new memmap
-        im2_storage["rgb_aligned"] = np.memmap(
-            tempfile.NamedTemporaryFile(),
-            mode="w+",
-            shape=shape,
-        )
-        im2_storage["rgb_aligned"][:] = im2_aligned
-
-        log.info("Successfully aligned %s to %s".format(im1_path, im2_path))
-
-        return im1_path, im2_path, True  # Operation success
+            image_paths.append(image_path)
+            self.image_storage[image_path] = {
+                "rgb_aligned": info_table[2],
+                "grayscale_aligned": info_table[3],
+            }
 
     # Return image shape
     def getImageShape(self):
@@ -255,6 +160,7 @@ class ImageHandler:
         shutil.rmtree(self.temp_dir_path)
 
     def clearImages(self):
+        log.info("Clearing loaded images and their files")
         self.image_storage = {}
         # Remove all tempfiles inside directory
         folder = self.temp_dir_path
@@ -266,7 +172,7 @@ class ImageHandler:
                 elif os.path.isdir(file_path):
                     shutil.rmtree(file_path)
             except Exception as e:
-                print("Failed to delete %s. Reason: %s" % (file_path, e))
+                log.error("Failed to delete %s. Reason: %s" % (file_path, e))
 
 
 class LaplacianPixelAlgorithm:

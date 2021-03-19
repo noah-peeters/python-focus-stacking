@@ -48,31 +48,23 @@ class AlignImages(qtc.QThread):
     finishedImage = qtc.pyqtSignal(list)
     finished = qtc.pyqtSignal(dict)
 
-    def __init__(self, files, parameters, algorithm):
+    def __init__(self, files, parameters, image_handler):
         super().__init__()
 
         self.files = files
         self.parameters = parameters
-        self.Algorithm = algorithm
+        self.ImageHandler = image_handler
         self.is_killed = False
 
     def run(self):
         start_time = time.time()
         image0 = self.files[round(len(self.files) / 2)]  # Get middle image
-        aligned_images = (
-            []
-        )  # Table for processed images (to check if all have been loaded)
-        for image_path in self.files:
-            image0, image1, success = self.Algorithm.alignImage.remote(
-                image0, image_path, self.parameters
-            )
 
-            if not success or self.is_killed:  # Operation failed or stopped from UI
-                break
+        def update_func(path):
+            self.finishedImage.emit([path, image0])
 
-            aligned_images.append(image_path)  # Append aligned image
-            # Send progress back to UI
-            self.finishedImage.emit([image0, image1])
+        self.parameters["image0"] = image0
+        aligned_images = self.ImageHandler.alignImages(self.files, self.parameters, update_func)
 
         # Operation ended
         self.finished.emit(
