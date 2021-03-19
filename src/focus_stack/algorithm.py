@@ -102,7 +102,7 @@ class ImageHandler:
                 "rgb_aligned": info_table[1],
                 "grayscale_aligned": info_table[2],
             }
-        
+
         return image_paths
 
     # Return image shape
