@@ -38,14 +38,14 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: macos-latest
-            TARGET: macos
-            CMD_BUILD: >
-                pyinstaller -F -w -n Python-Focus-Stacking src/focus_stack/main.py && 
-                cd dist/ && 
-                zip -r9 Python-Focus-Stacking Python-Focus-Stacking.app/
-            OUT_FILE_NAME: focus_stack.zip
-            ASSET_MIME: application/zip
+          # - os: macos-latest
+          #   TARGET: macos
+          #   CMD_BUILD: >
+          #       pyinstaller -F -w -n Python-Focus-Stacking src/focus_stack/main.py && 
+          #       cd dist/ && 
+          #       zip -r9 Python-Focus-Stacking Python-Focus-Stacking.app/
+          #   OUT_FILE_NAME: focus_stack.zip
+          #   ASSET_MIME: application/zip
             
           - os: windows-latest
             TARGET: windows
