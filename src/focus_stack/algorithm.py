@@ -99,9 +99,11 @@ class ImageHandler:
 
             image_paths.append(image_path)
             self.image_storage[image_path] = {
-                "rgb_aligned": info_table[2],
-                "grayscale_aligned": info_table[3],
+                "rgb_aligned": info_table[1],
+                "grayscale_aligned": info_table[2],
             }
+        
+        return image_paths
 
     # Return image shape
     def getImageShape(self):

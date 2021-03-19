@@ -344,11 +344,6 @@ class MainWindow(qtw.QMainWindow):
                 # Update progress slider
                 align_progress.setValue(counter)
 
-            self.aligning = QThreads.AlignImages(
-                self.loaded_image_files, parameters, self.ImageHandler
-            )
-            self.aligning.finishedImage.connect(update_progress)
-
             def finished_loading(returned):
                 # Add aligned images to processing list widget
                 widget = self.main_layout.list_widget.aligned_images_list
@@ -367,6 +362,10 @@ class MainWindow(qtw.QMainWindow):
                 props["success_message"].setStandardButtons(qtw.QMessageBox.Ok)
                 self.result_message(returned, props)
 
+            self.aligning = QThreads.AlignImages(
+                self.loaded_image_files, parameters, self.ImageHandler
+            )
+            self.aligning.finishedImage.connect(update_progress)
             self.aligning.finished.connect(finished_loading)
             align_progress.canceled.connect(
                 self.aligning.kill

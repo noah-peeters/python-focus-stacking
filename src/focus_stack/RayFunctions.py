@@ -103,25 +103,32 @@ def alignImage(im1_path, parameters, image_storage, dir):
     if parameters["GaussianBlur"]:
         gaussian_blur_size = parameters["GaussianBlur"]
 
-    # Find transformation
+    """
+    Find transformation
+    """
     t = image_storage[im1_path]
-    s = t["image_shape"]
-    memmap1 = np.memmap(
+    shape = t["image_shape"]
+    gray_memmap1 = np.memmap(
         t["grayscale_source"],
-        mode="w+",
-        shape=(s[0], s[1]),
+        mode="r",
+        shape=(shape[0], shape[1]),
     )
     t = image_storage[im2_path]
-    s = t["image_shape"]
-    memmap2 = np.memmap(
+    shape = t["image_shape"]
+    gray_memmap2 = np.memmap(
         t["grayscale_source"],
-        mode="w+",
-        shape=(s[0], s[1]),
+        mode="r",
+        shape=(shape[0], shape[1]),
+    )
+    rgb_memmap2 = np.memmap(
+        t["rgb_source"],
+        mode="r",
+        shape=shape,
     )
 
     _, warp_matrix = cv2.findTransformECC(
-        memmap1,
-        memmap2,
+        gray_memmap1,
+        gray_memmap2,
         warp_matrix,
         warp_mode,
         criteria,
@@ -129,34 +136,35 @@ def alignImage(im1_path, parameters, image_storage, dir):
         gaussian_blur_size,
     )
 
+    shape = (rgb_memmap2.shape[1], rgb_memmap2.shape[0])
     if warp_mode == cv2.MOTION_HOMOGRAPHY:  # Use warpPerspective for Homography
         # Align RGB
         im2_aligned = cv2.warpPerspective(
-            im2_rgb,
+            rgb_memmap2,
             warp_matrix,
-            im2_rgb["image_shape"],
+            shape,
             flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP,
         )
         # Align grayscale
         im2_grayscale_aligned = cv2.warpPerspective(
-            im2_gray,
+            gray_memmap2,
             warp_matrix,
-            im2_gray["image_shape"],
+            shape,
             flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP,
         )
     else:  # Use warpAffine for Translation, Euclidean and Affine
         # Align RGB
         im2_aligned = cv2.warpAffine(
-            im2_rgb,
+            rgb_memmap2,
             warp_matrix,
-            im2_rgb["image_shape"],
+            shape,
             flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP,
         )
         # Align grayscale
         im2_grayscale_aligned = cv2.warpAffine(
-            im2_gray,
+            gray_memmap2,
             warp_matrix,
-            im2_gray["image_shape"],
+            shape,
             flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP,
         )
 
