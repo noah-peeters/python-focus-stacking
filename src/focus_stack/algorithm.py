@@ -217,9 +217,7 @@ class ImageHandler:
 
             elif im_type == "gaussian" and "gaussian" in im_root:
                 im = im_root["gaussian"]
-                return np.memmap(
-                    im, mode="r", shape=im["image_shape"]
-                )
+                return np.memmap(im, mode="r", shape=im["image_shape"])
 
             elif im_type == "laplacian" and "laplacian" in im_root:
                 im = im_root["laplacian"]
