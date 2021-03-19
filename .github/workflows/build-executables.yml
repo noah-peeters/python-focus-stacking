@@ -41,14 +41,14 @@ jobs:
           - os: macos-latest
             TARGET: macos
             CMD_BUILD: >
-                pyinstaller src/focus_stack/main -n Python-Focus-Stacking
+                pyinstaller src/focus_stack/main.py-n Python-Focus-Stacking
             
           - os: windows-latest
             TARGET: windows
-            CMD_BUILD: pyinstaller src/focus_stack/main -n Python-Focus-Stacking
+            CMD_BUILD: pyinstaller src/focus_stack/main.py -n Python-Focus-Stacking
     
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v2
 
     - name: Set up Python 3.8
       uses: actions/setup-python@v2
