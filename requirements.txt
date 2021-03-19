@@ -8,3 +8,4 @@ setuptools==54.1.2
 scipy==1.6.1
 psutil==5.8.0
 ray==1.2.0
+pyinstaller==4.2
