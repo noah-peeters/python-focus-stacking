@@ -41,7 +41,7 @@ jobs:
           - os: macos-latest
             TARGET: macos
             CMD_BUILD: >
-                pyinstaller src/focus_stack/main.py-n Python-Focus-Stacking
+                pyinstaller src/focus_stack/main.py -n Python-Focus-Stacking
             
           - os: windows-latest
             TARGET: windows
