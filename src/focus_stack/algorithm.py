@@ -5,6 +5,7 @@ from scipy import ndimage
 import logging
 import ray
 import tempfile
+import os
 
 from src.focus_stack.utilities import Utilities
 import src.focus_stack.RayFunctions as RayFunctions
@@ -24,7 +25,7 @@ class ImageHandler:
         self.PyramidAlgorithm = PyramidAlgorithm(self)
 
         # Create tempdirectory (for storing all image data)
-        self.temp_dir_path = tempfile.mkdtemp(suffix="ptyhon_focus_stacking")
+        self.temp_dir_path = tempfile.mkdtemp(prefix="ptyhon_focus_stacking_")
 
     # Function to load a list of images in parallel
     def loadImages(self, image_paths, update_func):
