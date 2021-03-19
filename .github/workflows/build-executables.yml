@@ -3,7 +3,7 @@ name: Build executables for Linux, MacOS and Windows
 on:
   push:
     tags:
-      - 'v*' # Only run workflow if commit tag is started with "v" (v0.1.5)
+      - 'v*' # Only run workflow if commit tag is started with "v" (v0.1.5) 
 
 jobs:
   # Create new release on GitHub
