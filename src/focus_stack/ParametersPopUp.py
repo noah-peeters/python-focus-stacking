@@ -1,5 +1,5 @@
 """
-    Pop-ups for changing parameters before some processing actions (Alifning, Laplcian gradient calculation)
+    Pop-ups for changing parameters before some processing actions (Aligning, Laplcian gradient calculation)
 """
 import PyQt5.QtWidgets as qtw
 import PyQt5.QtCore as qtc

@@ -5,6 +5,13 @@ import PyQt5.QtCore as qtc
 import PyQt5.QtGui as qtg
 import ray
 
+# Import QThreads module and ParametersPopup shorthand
+import src.focus_stack.QThreadWorkers as QThreads
+import src.focus_stack.ParametersPopUp as ParametersPopUp
+
+# Topbar menu imports
+import src.focus_stack.Menu.Help as HelpMenu
+
 # Initialize ray
 ray.init()
 
@@ -29,9 +36,6 @@ root.setLevel(os.environ.get("LOGLEVEL", "DEBUG"))
 root.addHandler(handler)
 
 log = logging.getLogger(__name__)
-
-import src.focus_stack.QThreadWorkers as QThreads
-import src.focus_stack.ParametersPopUp as ParametersPopUp
 
 SUPPORTED_IMAGE_FORMATS = "(*.jpg *.png)"
 
@@ -144,7 +148,7 @@ class MainWindow(qtw.QMainWindow):
         )
 
         about_app_action = qtw.QAction(
-            "&About PyStacker", self, triggered=self.about_application
+            "&About PyStacker", self, triggered=lambda: HelpMenu.AboutApplication()
         )
         about_qt_action = qtw.QAction("&About Qt", self, triggered=qtw.qApp.aboutQt)
 
@@ -664,15 +668,6 @@ class MainWindow(qtw.QMainWindow):
         progress.setWindowModality(qtc.Qt.WindowModal)
         progress.setValue(0)
         return progress
-
-    def about_application(self):
-        qtw.QMessageBox.about(
-            self,
-            "About PyStacker",
-            "<b>PyStacker</b> is an application written in <b>Python</b> and <b>Qt</b> that is completely open-source: "
-            "<a href='https://github.com/noah-peeters/python-focus-stacking'>PyStacker on github</a>"
-            " and aims to provide an advanced focus stacking application for free.",
-        )
 
     # Enable or disable processing actions (only enable when images are loaded)
     def toggle_actions(self, menu_name, bool):
