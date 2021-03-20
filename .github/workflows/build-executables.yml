@@ -1,4 +1,4 @@
-name: Build executables for Linux, MacOS and Windows
+name: Build executables for Ubuntu, MacOS and Windows
 
 on:
   push:
@@ -38,6 +38,13 @@ jobs:
     strategy:
       matrix:
         include:
+          # - os: ubuntu-latest
+          #     TARGET: ubuntu
+          #     CMD_BUILD: >
+          #         pyinstaller -F -w -n focus_stack src/focus_stack/main.py && 
+          #         cd dist/
+          #     OUT_FILE_NAME: focus_stack.zip
+          #     ASSET_MIME: application/zip
           - os: macos-latest
             TARGET: macos
             CMD_BUILD: >
@@ -61,10 +68,11 @@ jobs:
       with:
         python-version: 3.8
 
-    - name: Install dependencies
+    - name: Install dependencies + PyInstaller
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install pyinstaller
 
     - name: Build with pyinstaller for ${{matrix.TARGET}}
       run: ${{matrix.CMD_BUILD}}

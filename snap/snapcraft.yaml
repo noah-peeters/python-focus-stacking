@@ -1,16 +1,31 @@
-name: pyqt-image-focus-stack
+name: python-focus-stack
 version: git
-summary: PyQt Image Focus Stacking Gui
+summary: Focus Stacking Application
 description: |
- An Image Focus Stacking GUI written in python3 / pyqt5 
-icon: snap/gui/pyqt-image-focus-stack.png
+  An Image Focus Stacking GUI written in python3 / pyqt5
 
 grade: devel
 base: core18
-# for now: devmode go to strict later
 confinement: devmode
 
+apps:
+  python-focus-stack:
+    command: desktop-launch  $SNAP/bin/python-focus-stack
+    plugs:
+      - desktop
+      - desktop-legacy
+      - wayland
+      - x11
+      - opengl
+
 parts:
+  # This part installs the qt5 dependencies and a `desktop-launch` script to initialise
+  # desktop-specific features such as fonts, themes and the XDG environment.
+  # 
+  # It is copied straight from the snapcraft desktop helpers project. Please periodically
+  # check the source for updates and copy the changes.
+  #    https://github.com/ubuntu/snapcraft-desktop-helpers/blob/master/snapcraft.yaml
+  # 
   desktop-qt5:
     source: https://github.com/ubuntu/snapcraft-desktop-helpers.git
     source-subdir: qt
@@ -19,6 +34,8 @@ parts:
     build-packages:
       - qtbase5-dev
       - dpkg-dev
+      - libgdk-x11-2.0.so.0
+      - libgtk-x11-2.0.so.0
     stage-packages:
       - libxkbcommon0
       - ttf-ubuntu-font-family
@@ -32,12 +49,12 @@ parts:
       - libqt5svg5 # for loading icon themes which are svg
       - try: [appmenu-qt5] # not available on core18
       - locales-all
-
-  pyqt-image-focus-stack:
+  
+  python-focus-stack:
     plugin: python
     python-version: python3
     source: .
-    requirements: 
+    requirements:
       - requirements.txt
     stage-packages:
       - xsel
@@ -56,7 +73,6 @@ parts:
       - libqt53drender5
       - libspeechd2
     after: [desktop-qt5]
-
 
 plugs:
   # Support for common GTK themes
@@ -77,7 +93,7 @@ plugs:
 
 # the  "extensions: [kde-neon]"" would simplify this yaml a LOT. Unfortunately, PyQt crashes on the "open file" dialog > we have to fallback to old config.
 apps:
-  pyqt-image-focus-stack:
+  python-focus-stack:
     environment:
       DISABLE_WAYLAND: 1
       # Use GTK3 cursor theme, icon theme and open/save file dialogs.
