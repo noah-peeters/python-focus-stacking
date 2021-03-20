@@ -51,5 +51,5 @@ class AboutThisPc(qtw.QMessageBox):
                 + e
                 + ")"
             )
-        
+
         self.exec_()
