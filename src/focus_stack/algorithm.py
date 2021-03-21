@@ -98,10 +98,9 @@ class ImageHandler:
             image_path = info_table[0]
 
             image_paths.append(image_path)
-            self.image_storage[image_path] = {
-                "rgb_aligned": info_table[1],
-                "grayscale_aligned": info_table[2],
-            }
+            # Append to image storage ditionary
+            self.image_storage[image_path]["rgb_aligned"] = info_table[1]
+            self.image_storage[image_path]["grayscale_aligned"] = info_table[2]
 
         return image_paths
 

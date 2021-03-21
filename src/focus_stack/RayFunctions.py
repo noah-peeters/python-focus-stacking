@@ -1,6 +1,6 @@
 """
-    Module containing helper functions that execute small tasks.
-    These can be parallellized with Ray.
+Module containing helper functions that execute small tasks.
+These can be parallellized with Ray.
 """
 
 import tempfile, logging
@@ -42,6 +42,8 @@ def loadImage(image_path, dir):
     )
     grayscale_memmap[:] = image_grayscale
 
+    log.info("Loaded image: " + image_path)
+
     # Return info
     return [image_path, image_shape, rgb_name, grayscale_name]
 
@@ -49,19 +51,19 @@ def loadImage(image_path, dir):
 # Align a single image
 @ray.remote
 def alignImage(im1_path, parameters, image_storage, dir):
-    im2_path = parameters["image0"]
+    im0_path = parameters["image0"]
     # Checks
     if not im1_path in image_storage:
         return
-    elif not im2_path in image_storage:
+    elif not im0_path in image_storage:
         return
     elif not "grayscale_source" in image_storage[im1_path]:
         return
-    elif not "grayscale_source" in image_storage[im2_path]:
+    elif not "grayscale_source" in image_storage[im0_path]:
         return
-    elif not "rgb_source" in image_storage[im2_path]:
+    elif not "rgb_source" in image_storage[im0_path]:
         return
-    elif not "image_shape" in image_storage[im2_path]:
+    elif not "image_shape" in image_storage[im0_path]:
         return
 
     # Get motion model from parameters
@@ -113,7 +115,7 @@ def alignImage(im1_path, parameters, image_storage, dir):
         mode="r",
         shape=(shape[0], shape[1]),
     )
-    t = image_storage[im2_path]
+    t = image_storage[im0_path]
     shape = t["image_shape"]
     gray_memmap2 = np.memmap(
         t["grayscale_source"],
@@ -139,14 +141,14 @@ def alignImage(im1_path, parameters, image_storage, dir):
     shape = (rgb_memmap2.shape[1], rgb_memmap2.shape[0])
     if warp_mode == cv2.MOTION_HOMOGRAPHY:  # Use warpPerspective for Homography
         # Align RGB
-        im2_aligned = cv2.warpPerspective(
+        im_aligned = cv2.warpPerspective(
             rgb_memmap2,
             warp_matrix,
             shape,
             flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP,
         )
         # Align grayscale
-        im2_grayscale_aligned = cv2.warpPerspective(
+        im_grayscale_aligned = cv2.warpPerspective(
             gray_memmap2,
             warp_matrix,
             shape,
@@ -154,14 +156,14 @@ def alignImage(im1_path, parameters, image_storage, dir):
         )
     else:  # Use warpAffine for Translation, Euclidean and Affine
         # Align RGB
-        im2_aligned = cv2.warpAffine(
+        im_aligned = cv2.warpAffine(
             rgb_memmap2,
             warp_matrix,
             shape,
             flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP,
         )
         # Align grayscale
-        im2_grayscale_aligned = cv2.warpAffine(
+        im_grayscale_aligned = cv2.warpAffine(
             gray_memmap2,
             warp_matrix,
             shape,
@@ -173,21 +175,21 @@ def alignImage(im1_path, parameters, image_storage, dir):
     rgb_aligned = np.memmap(
         rgb_aligned_name,
         mode="w+",
-        shape=im2_aligned.shape,
-        dtype=im2_aligned.dtype,
+        shape=im_aligned.shape,
+        dtype=im_aligned.dtype,
     )
-    rgb_aligned[:] = im2_aligned
-    del im2_aligned
+    rgb_aligned[:] = im_aligned
+    del im_aligned
 
     _, grayscale_aligned_name = tempfile.mkstemp(suffix=".grayscale_aligned", dir=dir)
     grayscale_aligned = np.memmap(
         grayscale_aligned_name,
         mode="w+",
-        shape=im2_grayscale_aligned.shape,
-        dtype=im2_grayscale_aligned.dtype,
+        shape=im_grayscale_aligned.shape,
+        dtype=im_grayscale_aligned.dtype,
     )
-    grayscale_aligned[:] = im2_grayscale_aligned
+    grayscale_aligned[:] = im_grayscale_aligned
 
-    log.info("Successfully aligned %s to %s".format(im1_path, im2_path))
+    print("Successfully aligned {} to {}".format(im1_path, im0_path))
 
-    return [im2_path, rgb_aligned_name, grayscale_aligned_name]
+    return [im1_path, rgb_aligned_name, grayscale_aligned_name]

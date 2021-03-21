@@ -89,25 +89,14 @@ class AboutThisPc(qtw.QDialog):
                 gpus_info = []
 
                 for gpu in gpus:
-                    # get % percentage of GPU usage
-                    gpu_load = f"{gpu.load*100}%"
-                    # get free memory in MB
-                    free_memory = f"{gpu.memoryFree}MB"
-                    used_memory = f"{gpu.memoryUsed}MB"
                     total_memory = f"{gpu.memoryTotal}MB"
-                    # get temperature in Celsius
-                    temperature = f"{gpu.temperature} °C"
 
                     gpus_info.append(
                         {
                             "name": gpu.name,
                             "id": gpu.id,
                             "uuid": gpu.uuid,
-                            "load": gpu_load,
-                            "free_memory": free_memory,
-                            "used_memory": used_memory,
                             "total_memory": total_memory,
-                            "temperature": temperature,
                         }
                     )
 
@@ -118,10 +107,7 @@ class AboutThisPc(qtw.QDialog):
                     l.addRow("GPU name:", qtw.QLabel(info["name"]))
                     l.addRow("GPU id:", qtw.QLabel(str(info["id"])))
                     l.addRow("uuid of GPU", qtw.QLabel(info["uuid"]))
-                    l.addRow("GPU usage:", qtw.QLabel(str(info["load"])))
-                    l.addRow("Free memory", qtw.QLabel(str(info["free_memory"])))
                     l.addRow("Total memory", qtw.QLabel(str(info["total_memory"])))
-                    l.addRow("Temperature:", qtw.QLabel(str(temperature)))
 
                     widget = qtw.QWidget()
                     widget.setLayout(l)
