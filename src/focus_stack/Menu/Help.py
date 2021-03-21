@@ -6,8 +6,9 @@ These classes are Qt widgets that will get shown on menu click.
 import PyQt5.QtWidgets as qtw
 import PyQt5.QtCore as qtc
 import PyQt5.QtGui as qtg
-import platform, psutil, socket, re, uuid, psutil, logging, multiprocessing
+import platform, psutil, socket, re, uuid, psutil, logging, multiprocessing, traceback
 import math
+import GPUtil
 
 log = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ class AboutThisPc(qtw.QDialog):
         self.setWindowTitle("About this PC")
 
         try:
-
+            # Convert bytes to other formats for easier reading
             def convert_size(size_bytes):
                 if size_bytes == 0:
                     return "0B"
@@ -43,6 +44,7 @@ class AboutThisPc(qtw.QDialog):
                 s = round(size_bytes / p, 2)
                 return "%s %s" % (s, size_name[i])
 
+            # Hardware info
             platfrm = platform.system()
             node_name = platform.node()
             platform_release = platform.release()
@@ -51,13 +53,15 @@ class AboutThisPc(qtw.QDialog):
             processor = platform.processor()
             ram = convert_size(psutil.virtual_memory().total)
             cpu_count = str(multiprocessing.cpu_count())
+            # Network info
             hostname = socket.gethostname()
             ip_address = socket.gethostbyname(socket.gethostname())
             mac_address = ":".join(re.findall("..", "%012x" % uuid.getnode()))
 
             # Success loading PC data
             layout = qtw.QFormLayout()
-            layout.addRow("<b>Hardware</b>", qtw.QLabel(""))
+            # Hardware
+            layout.addRow("<big><b>Hardware information</b></big>", qtw.QLabel(""))
             layout.addRow("Platform:", qtw.QLabel(platfrm))
             layout.addRow("Node name:", qtw.QLabel(node_name))
             layout.addRow("Platform-release:", qtw.QLabel(platform_release))
@@ -69,11 +73,71 @@ class AboutThisPc(qtw.QDialog):
                 "Amount of RAM:",
                 qtw.QLabel(ram),
             )
-            layout.addRow("<b>Network</b>", qtw.QLabel(""))
+            # Network
+            layout.addRow("<big><b>Network information</b></big>", qtw.QLabel(""))
             layout.addRow("Hostname:", qtw.QLabel(hostname))
             layout.addRow("IP Address:", qtw.QLabel(ip_address))
             layout.addRow("Mac Address:", qtw.QLabel(mac_address))
+            # GPU
+            layout.addRow("<big><b>GPU information</b></big>", qtw.QLabel(""))
+
             self.setLayout(layout)
+
+            # Try getting GPU information
+            try:
+                gpus = GPUtil.getGPUs()
+                gpus_info = []
+
+                for gpu in gpus:
+                    # get % percentage of GPU usage
+                    gpu_load = f"{gpu.load*100}%"
+                    # get free memory in MB
+                    free_memory = f"{gpu.memoryFree}MB"
+                    used_memory = f"{gpu.memoryUsed}MB"
+                    total_memory = f"{gpu.memoryTotal}MB"
+                    # get temperature in Celsius
+                    temperature = f"{gpu.temperature} °C"
+
+                    gpus_info.append(
+                        {
+                            "name": gpu.name,
+                            "id": gpu.id,
+                            "uuid": gpu.uuid,
+                            "load": gpu_load,
+                            "free_memory": free_memory,
+                            "used_memory": used_memory,
+                            "total_memory": total_memory,
+                            "temperature": temperature,
+                        }
+                    )
+
+                tabwidget = qtw.QTabWidget()
+                # Create QFormLayouts for each GPU
+                for info in gpus_info:
+                    l = qtw.QFormLayout()
+                    l.addRow("GPU name:", qtw.QLabel(info["name"]))
+                    l.addRow("GPU id:", qtw.QLabel(str(info["id"])))
+                    l.addRow("uuid of GPU", qtw.QLabel(info["uuid"]))
+                    l.addRow("GPU usage:", qtw.QLabel(str(info["load"])))
+                    l.addRow("Free memory", qtw.QLabel(str(info["free_memory"])))
+                    l.addRow("Total memory", qtw.QLabel(str(info["total_memory"])))
+                    l.addRow("Temperature:", qtw.QLabel(str(temperature)))
+
+                    widget = qtw.QWidget()
+                    widget.setLayout(l)
+                    # Add layout to QTabWidget
+                    tabwidget.addTab(widget, info["name"])
+
+                # Add tabwidget to layout
+                layout.addWidget(tabwidget)
+
+            except Exception as e:
+                # Failed to load GPU information (display error)
+                layout.addRow("Failed to load GPU information", qtw.QLabel(""))
+
+                log.error("Failed to detect/show GPU information")
+                log.error(str(e))
+                traceback.print_exc()
 
         except Exception as e:
             # Failed to load PC data
