@@ -5,7 +5,7 @@ Adapted algorithms from:
 
  - Image alignment and laplacian algorithm adapted from:
    [momonola/focus-stack](https://github.com/momonala/focus-stack) and
-   https://osf.io/j8kby/. These implementations worked fine for small images, but every image had to be loaded into RAM-memory causing the program to crash. Solution was to use numpy memmaps.
+   https://osf.io/j8kby/. These implementations worked fine for small images, but every image had to be loaded into RAM-memory causing the program to crash when      using large images. Solution was to use numpy memmaps.
 
  - Laplacian Pyramid algorithm adapted from: [sjawhar/focus-stacking](https://github.com/sjawhar/focus-stacking)
 
