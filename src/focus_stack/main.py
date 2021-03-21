@@ -76,6 +76,23 @@ class MainWindow(qtw.QMainWindow):
             style = self.style()
             return style.standardIcon(getattr(qtw.QStyle, name))
 
+        # Shorthand function that returns a QAction with specified parameters
+        def create_action(text, shortcut, triggered, tip, icon_name, menu):
+            action = qtw.QAction(text, self)
+            if shortcut:
+                action.setShortcut(shortcut)
+            if triggered:
+                action.triggered.connect(triggered)
+            if tip:
+                action.setToolTip(tip)
+                action.setStatusTip(tip)
+            if icon_name:
+                path = "icons/" + icon_name + ".svg"
+                action.setIcon(qtg.QIcon(path))
+
+            menu.addAction(action)
+            return action
+
         # Menu bar setup
         menu_bar = qtw.QMenuBar(self)
         self.setMenuBar(menu_bar)
@@ -88,133 +105,143 @@ class MainWindow(qtw.QMainWindow):
         edit_menu = menu_bar.addMenu("&Edit")
         help_menu = menu_bar.addMenu("&Help")
 
-        # Create actions
-        new_action = qtw.QAction(
-            "&New file", self, shortcut="Ctrl+N", triggered=self.create_new_file
+        """
+        Create actions
+        """
+        # file_menu
+        new_action = create_action(
+            "&New file",
+            "Ctrl+N",
+            self.create_new_file,
+            "Create a new file. Unsaved progress will be lost!",
+            "new_file",
+            file_menu,
         )
-        open_action = qtw.QAction(
-            "&Open file", self, shortcut="Ctrl+O", triggered=self.open_file
+        open_action = create_action(
+            "&Open file",
+            "Ctrl+N",
+            self.open_file,
+            "Open a file on disk. Unsaved progress will be lost!",
+            "open_file",
+            file_menu,
         )
-        save_file = qtw.QAction(
-            "&Save file", self, shortcut="Ctrl+S", triggered=self.save_file
+        save_file_action = create_action(
+            "&Save file",
+            "Ctrl+S",
+            self.save_file,
+            "Save project file to disk.",
+            "save_file",
+            file_menu,
         )
-        load_images_action = qtw.QAction(
-            "&Load images", self, shortcut="Ctrl+L", triggered=self.load_images
+        load_images_action = create_action(
+            "&Load images",
+            "Ctrl+L",
+            self.load_images,
+            "Load a set of images from disk.",
+            "load_images",
+            file_menu,
         )
-        clear_loaded_images_action = qtw.QAction(
+        clear_loaded_images_action = create_action(
             "&Clear loaded images",
-            self,
-            shortcut="Ctrl+Alt+C",
-            triggered=self.clear_loaded_images,
+            "Ctrl+Alt+C",
+            self.clear_loaded_images,
+            "Clear all loaded images.",
+            "clear_loaded_images",
+            file_menu,
         )
-        export_action = qtw.QAction(
-            "&Export image", self, shortcut="Ctrl+E", triggered=self.exportImage
+        export_action = create_action(
+            "&Export image",
+            "Ctrl+E",
+            self.exportImage,
+            "Export output image.",
+            "export_image",
+            file_menu,
         )
-        quit_action = qtw.QAction(
-            "&Quit", self, shortcut="Ctrl+W", triggered=lambda: self.close()
+        quit_action = create_action(
+            "&Quit",
+            "Ctrl+W",
+            lambda: self.close(),
+            "Exit the application. Unsaved progress will be lost!",
+            "exit_application",
+            file_menu,
         )
 
-        self.align_images_action = qtw.QAction(
+        # processing_menu
+        self.align_images_action = create_action(
             "&Align images",
-            self,
-            shortcut="Ctrl+Shift+A",
-            triggered=self.align_images,
-            enabled=False,
-        )  # Disabled by default
-        self.stack_images_action = qtw.QAction(
-            "&Stack Images",
-            self,
-            shortcut="Ctrl+Shift+S",
-            triggered=self.stackImages_Laplacian,
-            enabled=False,
+            "Ctrl+Shift+A",
+            self.align_images,
+            "Align images to each other.",
+            "align_images",
+            processing_menu,
         )
-        self.align_and_stack_images_action = qtw.QAction(
-            "&Align and stack images",
-            self,
-            shortcut="Ctrl+Shift+P",
-            triggered=self.align_and_stack_images,
-            enabled=False,
+        self.align_images_action.setEnabled(False)
+        self.stack_images_action = create_action(
+            "&Stack images",
+            "Ctrl+Shift+S",
+            self.stackImages_Laplacian,
+            "Focus stack images.",
+            "focus_stack_images",
+            processing_menu,
         )
+        self.stack_images_action.setEnabled(False)
+        self.align_and_stack_images_action = create_action(
+            "Align and stack &images",
+            "Ctrl+Shift+P",
+            self.align_and_stack_images,
+            "Align and stack images.",
+            "align_and_stack_images",
+            processing_menu,
+        )
+        self.align_and_stack_images_action.setEnabled(False)
 
-        self.image_preview_reset_zoom = qtw.QAction(
-            "&Reset zoom on preview", self, enabled=False, checkable=True, checked=True
+        # image_preview_menu
+        self.image_preview_reset_zoom = create_action(
+            "&Reset zoom on preview",
+            None,
+            None,
+            "Reset zoom on new image select.",
+            "image_preview_reset_zoom",
+            image_preview_menu,
         )
+        self.image_preview_reset_zoom.setEnabled(False)
+        self.image_preview_reset_zoom.setCheckable(False)
+        self.image_preview_reset_zoom.setChecked(True)
 
-        preferences_action = qtw.QAction(
+        # edit_menu
+        preferences_action = create_action(
             "&Preferences",
-            self,
-            shortcut="Ctrl+P",
-            triggered=lambda: self.Preferences.exec_(),
+            "Ctrl+P",
+            lambda: self.Preferences.exec_(),
+            "Open preferences window.",
+            "preferences",
+            edit_menu,
         )
-
-        about_app_action = qtw.QAction(
-            "About &PyStacker", self, triggered=lambda: HelpMenu.AboutApplication()
+        # help_menu
+        about_app_action = create_action(
+            "About &PyStacker",
+            None,
+            lambda: HelpMenu.AboutApplication(),
+            "About this application.",
+            "about_application",
+            help_menu,
         )
-        about_this_pc_action = qtw.QAction(
-            "About &this PC", self, triggered=lambda: HelpMenu.AboutThisPc()
+        about_this_pc_action = create_action(
+            "About this &PC",
+            None,
+            lambda: HelpMenu.AboutThisPc(),
+            "About this PC.",
+            "about_pc",
+            help_menu,
         )
-        about_qt_action = qtw.QAction("About &Qt", self, triggered=qtw.qApp.aboutQt)
-
-        # Setup help tips for actions
-        new_action.setStatusTip("Create a new file. Unsaved progress will be lost!")
-        open_action.setStatusTip("Open a file on disk. Unsaved progress will be lost!")
-        save_file.setStatusTip("Save file to disk.")
-        load_images_action.setStatusTip("Load images from disk.")
-        clear_loaded_images_action.setStatusTip("Clear all loaded images.")
-        export_action.setStatusTip("Export output image.")
-        quit_action.setStatusTip("Exit the application. Unsaved progress will be lost!")
-
-        self.align_images_action.setStatusTip("Align images.")
-        self.stack_images_action.setStatusTip("Focus stack images.")
-        self.align_and_stack_images_action.setStatusTip(
-            "Align images and focus stack them."
+        about_qt_action = create_action(
+            "About &Qt",
+            None,
+            qtw.qApp.aboutQt,
+            "About Qt, the framework that is used for UI design.",
+            None,
+            help_menu,
         )
-
-        self.image_preview_reset_zoom.setStatusTip("Reset zoom on new image select.")
-
-        preferences_action.setStatusTip("Preferences: themes and other settings.")
-
-        about_app_action.setStatusTip("About this application.")
-        about_this_pc_action.setStatusTip("Information about this PC.")
-        about_qt_action.setStatusTip(
-            "About Qt, the framework that is used for UI design."
-        )
-
-        # Icons for actions
-        new_action.setIcon(get_icon("SP_FileIcon"))
-        save_file.setIcon(get_icon("SP_DialogSaveButton"))
-        open_action.setIcon(get_icon("SP_DialogOpenButton"))
-        load_images_action.setIcon(get_icon("SP_FileDialogNewFolder"))
-        clear_loaded_images_action.setIcon(get_icon("SP_DialogDiscardButton"))
-        export_action.setIcon(get_icon("SP_DialogYesButton"))
-        quit_action.setIcon(get_icon("SP_TitleBarCloseButton"))
-
-        self.align_images_action.setIcon(get_icon("SP_FileDialogContentsView"))
-        self.stack_images_action.setIcon(get_icon("SP_TitleBarNormalButton"))
-        self.align_and_stack_images_action.setIcon(get_icon("SP_BrowserReload"))
-
-        about_qt_action.setIcon(get_icon("SP_TitleBarMenuButton"))
-
-        # Add actions to menu
-        file_menu.addAction(new_action)
-        file_menu.addAction(open_action)
-        file_menu.addAction(save_file)
-        file_menu.addAction(load_images_action)
-        file_menu.addAction(clear_loaded_images_action)
-        file_menu.addAction(export_action)
-        file_menu.addAction(quit_action)
-
-        processing_menu.addAction(self.align_images_action)
-        processing_menu.addAction(self.stack_images_action)
-        processing_menu.addAction(self.align_and_stack_images_action)
-
-        image_preview_menu.addAction(self.image_preview_reset_zoom)
-
-        edit_menu.addAction(preferences_action)
-
-        help_menu.addAction(about_app_action)
-        help_menu.addAction(about_this_pc_action)
-        help_menu.addAction(about_qt_action)
 
     def create_new_file(self):
         print("Create new file")
