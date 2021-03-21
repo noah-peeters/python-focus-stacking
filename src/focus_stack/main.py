@@ -148,9 +148,12 @@ class MainWindow(qtw.QMainWindow):
         )
 
         about_app_action = qtw.QAction(
-            "&About PyStacker", self, triggered=lambda: HelpMenu.AboutApplication()
+            "About &PyStacker", self, triggered=lambda: HelpMenu.AboutApplication()
         )
-        about_qt_action = qtw.QAction("&About Qt", self, triggered=qtw.qApp.aboutQt)
+        about_this_pc_action = qtw.QAction(
+            "About &this PC", self, triggered=lambda: HelpMenu.AboutThisPc()
+        )
+        about_qt_action = qtw.QAction("About &Qt", self, triggered=qtw.qApp.aboutQt)
 
         # Setup help tips for actions
         new_action.setStatusTip("Create a new file. Unsaved progress will be lost!")
@@ -172,8 +175,9 @@ class MainWindow(qtw.QMainWindow):
         preferences_action.setStatusTip("Preferences: themes and other settings.")
 
         about_app_action.setStatusTip("About this application.")
+        about_this_pc_action.setStatusTip("Information about this PC.")
         about_qt_action.setStatusTip(
-            "About Qt, the framework that was used to design this ui."
+            "About Qt, the framework that is used for UI design."
         )
 
         # Icons for actions
@@ -209,6 +213,7 @@ class MainWindow(qtw.QMainWindow):
         edit_menu.addAction(preferences_action)
 
         help_menu.addAction(about_app_action)
+        help_menu.addAction(about_this_pc_action)
         help_menu.addAction(about_qt_action)
 
     def create_new_file(self):
