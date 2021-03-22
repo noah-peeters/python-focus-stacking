@@ -7,5 +7,5 @@ qimage2ndarray
 setuptools
 scipy
 psutil
-gputil
+GPUtil
 ray
