@@ -71,11 +71,6 @@ class MainWindow(qtw.QMainWindow):
 
     # Setup file menu (topbar)
     def setup_file_menu(self):
-        # Get built-in icon from name (shorthand)
-        def get_icon(name):
-            style = self.style()
-            return style.standardIcon(getattr(qtw.QStyle, name))
-
         # Shorthand function that returns a QAction with specified parameters
         def create_action(text, shortcut, triggered, tip, icon_name, menu):
             action = qtw.QAction(text, self)

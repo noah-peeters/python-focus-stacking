@@ -8,15 +8,31 @@ grade: devel
 base: core18
 confinement: devmode
 
+icon: snap/gui/pyqt-image-focus-stack.png
+
+architectures:
+  - build-on: [amd64, arm64, armhf]
+
+# The "extensions: [kde-neon]"" would simplify this yaml a LOT. Unfortunately, PyQt crashes on the "open file" dialog > we have to fallback to old config.
 apps:
   python-focus-stack:
     command: desktop-launch  $SNAP/bin/python-focus-stack
+    environment:
+      DISABLE_WAYLAND: 1
+      # Use GTK3 cursor theme, icon theme and open/save file dialogs.
+      QT_QPA_PLATFORMTHEME: gtk3
     plugs:
       - desktop
       - desktop-legacy
       - wayland
       - x11
       - opengl
+      - home
+      - network
+      - network-bind
+      - network-control
+      - mount-observe
+      - unity7
 
 parts:
   # This part installs the qt5 dependencies and a `desktop-launch` script to initialise
@@ -32,6 +48,7 @@ parts:
     plugin: make
     make-parameters: ["FLAVOR=qt5"]
     build-packages:
+      - build-essential
       - qtbase5-dev
       - dpkg-dev
     stage-packages:
@@ -55,60 +72,35 @@ parts:
     requirements:
       - requirements.txt
     stage-packages:
-      - xsel
-      - python3-pyqt5
-      - qt5-gtk-platformtheme
-      - qtwayland5 
-      - python3-pyqtgraph
-      - python3-numpy
-      - libqt53danimation5
-      - libqt53dcore5
-      - libqt53dextras5
-      - libqt53dinput5
-      - libqt53dlogic5
-      - libqt53dquick5
-      - libqt53dquickscene2d5
-      - libqt53drender5
-      - libspeechd2
+      - fonts-open-sans
+      - python3-cryptography
+      - python3-colorlog
+      - python3-requests
+      - python3-shapely
+      - python3-zeroconf
+      - python3-distutils
+      - python3-pyqt5.qtopengl
+      - python3-pyqt5.qtquick
+      - python3-pyqt5.qtsvg
+      - qml-module-qt-labs-folderlistmodel
+      - qml-module-qt-labs-settings
+      - qml-module-qtquick-controls
+      - qml-module-qtquick-controls2
+      - qtwayland5
     after: [desktop-qt5]
 
+# Themes
 plugs:
-  # Support for common GTK themes
-  # https://forum.snapcraft.io/t/how-to-use-the-system-gtk-theme-via-the-gtk-common-themes-snap/6235
   gsettings:
   gtk-3-themes:
     interface: content
     target: $SNAP/data-dir/themes
-    default-provider: gtk-common-themes
+    default-provider: gtk-common-themes:gtk-3-themes
   icon-themes:
     interface: content
     target: $SNAP/data-dir/icons
-    default-provider: gtk-common-themes
+    default-provider: gtk-common-themes:icon-themes
   sound-themes:
     interface: content
     target: $SNAP/data-dir/sounds
-    default-provider: gtk-common-themes
-
-# the  "extensions: [kde-neon]"" would simplify this yaml a LOT. Unfortunately, PyQt crashes on the "open file" dialog > we have to fallback to old config.
-apps:
-  python-focus-stack:
-    environment:
-      DISABLE_WAYLAND: 1
-      # Use GTK3 cursor theme, icon theme and open/save file dialogs.
-      QT_QPA_PLATFORMTHEME: gtk3
-    command: desktop-launch $SNAP/bin/focus_stack
-    plugs:
-      - opengl
-      - home
-      - network
-      - network-bind
-      - network-control
-      - mount-observe
-      - desktop
-      - desktop-legacy
-      - x11
-      - unity7
-      - wayland
-
-architectures:
-  - build-on: [amd64, arm64, armhf]
+    default-provider: gtk-common-themes:sounds-themes
