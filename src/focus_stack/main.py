@@ -269,7 +269,9 @@ class MainWindow(qtw.QMainWindow):
             return
 
         self.toggle_actions("processing", True)  # Enable processing actions
-        self.current_directory = self.loaded_image_files[0]  # Set current directory for next image load
+        self.current_directory = self.loaded_image_files[
+            0
+        ]  # Set current directory for next image load
 
         # Get total size of all images to import
         total_size = 0
@@ -293,6 +295,7 @@ class MainWindow(qtw.QMainWindow):
         )
 
         counter = 0
+
         def update_progress(image_path):
             nonlocal counter
             counter += 1
@@ -759,7 +762,9 @@ class MainLayout(qtw.QWidget):
     def set_image_list(self, image_paths, widget=None):
         self.image_paths = image_paths
 
-        if self.image_paths and len(self.image_paths) > 0 and widget:  # Images loaded, display their names.
+        if (
+            self.image_paths and len(self.image_paths) > 0 and widget
+        ):  # Images loaded, display their names.
             widget.clear()
             items = {}
             # Display list (without icons)

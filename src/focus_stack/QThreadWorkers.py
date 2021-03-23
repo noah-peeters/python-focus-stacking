@@ -31,7 +31,7 @@ class LoadImages(qtc.QThread):
 
         loaded_images = self.ImageHandler.loadImages(self.images, update_func)
 
-        loaded_images.sort()    # Sort list (parallel operation can shuffle list)
+        loaded_images.sort()  # Sort list (parallel operation can shuffle list)
 
         self.finished.emit(
             {
@@ -69,7 +69,7 @@ class AlignImages(qtc.QThread):
         aligned_images = self.ImageHandler.alignImages(
             self.files, self.parameters, update_func
         )
-        aligned_images.sort()   # Sort list (parallel operation can shuffle list)
+        aligned_images.sort()  # Sort list (parallel operation can shuffle list)
 
         # Operation ended
         self.finished.emit(
