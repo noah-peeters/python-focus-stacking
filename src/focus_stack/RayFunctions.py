@@ -108,14 +108,14 @@ def alignImage(im1_path, parameters, image_storage, dir):
     """
     Find transformation
     """
-    t = image_storage[im1_path]
+    t = image_storage[im0_path]
     shape = t["image_shape"]
     gray_memmap1 = np.memmap(
         t["grayscale_source"],
         mode="r",
         shape=(shape[0], shape[1]),
     )
-    t = image_storage[im0_path]
+    t = image_storage[im1_path]
     shape = t["image_shape"]
     gray_memmap2 = np.memmap(
         t["grayscale_source"],

@@ -17,7 +17,7 @@ class LoadImages(qtc.QThread):
     def __init__(self, files, image_handler):
         super().__init__()
 
-        self.files = files
+        self.images = files
         self.is_killed = False
 
         # Initialize ImageHandler
@@ -29,7 +29,9 @@ class LoadImages(qtc.QThread):
         def update_func(path):
             self.finishedImage.emit(path)
 
-        loaded_images = self.ImageHandler.loadImages(self.files, update_func)
+        loaded_images = self.ImageHandler.loadImages(self.images, update_func)
+
+        loaded_images.sort()    # Sort list (parallel operation can shuffle list)
 
         self.finished.emit(
             {
@@ -67,6 +69,7 @@ class AlignImages(qtc.QThread):
         aligned_images = self.ImageHandler.alignImages(
             self.files, self.parameters, update_func
         )
+        aligned_images.sort()   # Sort list (parallel operation can shuffle list)
 
         # Operation ended
         self.finished.emit(

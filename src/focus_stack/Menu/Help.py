@@ -106,8 +106,8 @@ class AboutThisPc(qtw.QDialog):
                     l = qtw.QFormLayout()
                     l.addRow("GPU name:", qtw.QLabel(info["name"]))
                     l.addRow("GPU id:", qtw.QLabel(str(info["id"])))
-                    l.addRow("uuid of GPU", qtw.QLabel(info["uuid"]))
-                    l.addRow("Total memory", qtw.QLabel(str(info["total_memory"])))
+                    l.addRow("GPU uuid:", qtw.QLabel(info["uuid"]))
+                    l.addRow("Total memory:", qtw.QLabel(str(info["total_memory"])))
 
                     widget = qtw.QWidget()
                     widget.setLayout(l)

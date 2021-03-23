@@ -57,7 +57,7 @@ class MainWindow(qtw.QMainWindow):
         self.Utilities = Utilities()
 
         """
-            Self setup
+            Window setup
         """
         self.setWindowTitle("PyStacker")
         self.setStatusBar(qtw.QStatusBar())  # Create status bar
@@ -268,12 +268,8 @@ class MainWindow(qtw.QMainWindow):
             self.toggle_actions("processing", False)  # Disable processing actions
             return
 
-        # Set absolute paths
-        for val in self.loaded_image_files:
-            val = os.path.abspath(val)
-
         self.toggle_actions("processing", True)  # Enable processing actions
-        self.current_directory = self.loaded_image_files[0]  # Set current directory
+        self.current_directory = self.loaded_image_files[0]  # Set current directory for next image load
 
         # Get total size of all images to import
         total_size = 0
@@ -297,7 +293,6 @@ class MainWindow(qtw.QMainWindow):
         )
 
         counter = 0
-
         def update_progress(image_path):
             nonlocal counter
             counter += 1
@@ -313,7 +308,8 @@ class MainWindow(qtw.QMainWindow):
         self.loading.finishedImage.connect(update_progress)  # Update progress callback
 
         def finished_loading(returned):
-            self.loaded_image_files = returned["image_table"]  # Set loaded images
+            self.loaded_image_files = returned["image_table"]
+
             # Update listing of loaded images
             self.main_layout.set_image_list(
                 self.loaded_image_files,
@@ -763,7 +759,7 @@ class MainLayout(qtw.QWidget):
     def set_image_list(self, image_paths, widget=None):
         self.image_paths = image_paths
 
-        if len(self.image_paths) > 0 and widget:  # Images loaded, display their names.
+        if self.image_paths and len(self.image_paths) > 0 and widget:  # Images loaded, display their names.
             widget.clear()
             items = {}
             # Display list (without icons)
