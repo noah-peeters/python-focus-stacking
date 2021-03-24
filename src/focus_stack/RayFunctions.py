@@ -77,7 +77,7 @@ def alignImage(im1_path, parameters, image_storage, dir):
         warp_mode = cv2.MOTION_EUCLIDEAN
     elif mode == "Homography":
         warp_mode = cv2.MOTION_HOMOGRAPHY
-    
+
     print("ONE: " + str(psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2))
 
     # Define 2x3 or 3x3 warp matrix (1's on diagonal, 0's everywhere else)
@@ -85,7 +85,7 @@ def alignImage(im1_path, parameters, image_storage, dir):
         warp_matrix = np.eye(3, 3, dtype=np.float32)
     else:
         warp_matrix = np.eye(2, 3, dtype=np.float32)
-    
+
     print("TWO: " + str(psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2))
 
     # Get number of iterations

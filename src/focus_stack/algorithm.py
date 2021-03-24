@@ -181,9 +181,15 @@ class ImageHandler:
         if path in self.image_storage:
             im = self.image_storage[path]
             if im_type + "_aligned" in im:
-                return im[im_type + "_aligned"], im["image_shape"]  # Return aligned image
+                return (
+                    im[im_type + "_aligned"],
+                    im["image_shape"],
+                )  # Return aligned image
             elif im_type + "_source" in im:
-                return im[im_type + "_source"], (im["image_shape"][0], im["image_shape"][1])  # Return source image
+                return im[im_type + "_source"], (
+                    im["image_shape"][0],
+                    im["image_shape"][1],
+                )  # Return source image
 
 
 class LaplacianPixelAlgorithm:
