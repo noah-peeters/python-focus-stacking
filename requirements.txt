@@ -1,4 +1,4 @@
-opencv-python
+opencv-python-headless # UI is not needed
 numpy
 PyQt5
 path

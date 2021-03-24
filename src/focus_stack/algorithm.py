@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 
 class ImageHandler:
     image_storage = {}
-    image_shape = []
+    image_shape = ()
     temp_dir_path = None
 
     def __init__(self):
@@ -176,6 +176,14 @@ class ImageHandler:
                     shutil.rmtree(file_path)
             except Exception as e:
                 log.error("Failed to delete %s. Reason: %s" % (file_path, e))
+
+    def rgbOrAligned(self, path, im_type):
+        if path in self.image_storage:
+            im = self.image_storage[path]
+            if im_type + "_aligned" in im:
+                return im[im_type + "_aligned"], im["image_shape"]  # Return aligned image
+            elif im_type + "_source" in im:
+                return im[im_type + "_source"], (im["image_shape"][0], im["image_shape"][1])  # Return source image
 
 
 class LaplacianPixelAlgorithm:
@@ -431,6 +439,10 @@ class PyramidAlgorithm:
         for level in range(len(gaussian) - 1, 0, -1):
             gauss = gaussian[level - 1]
             d = gauss[0].shape
+            print(d)
+            print(d[0])
+            print(d[1])
+            print(d[2])
             pyramid.append(
                 np.memmap(
                     tempfile.NamedTemporaryFile(),
@@ -587,13 +599,17 @@ class PyramidAlgorithm:
 
         images = []
         for path in image_paths:
-            images.append(
-                np.memmap(
-                    self.Parent.rgb_images_temp_files[path],
-                    mode="r",
-                    shape=self.Parent.image_shape,
+            im_file, shape = self.Parent.rgbOrAligned(path, "rgb")
+            if im_file:
+                images.append(
+                    np.memmap(
+                        im_file,
+                        mode="r",
+                        shape=shape,
+                        dtype=np.uint8,
+                    )
                 )
-            )
+        print(images)
 
         log.info("Just loaded {} images.".format(len(image_paths)))
         log.info(
@@ -601,6 +617,7 @@ class PyramidAlgorithm:
         )
 
         # Calculate gaussian pyramid
+        print(images[0])
         smallest_side = min(images[0].shape[:2])
         depth = int(np.log2(smallest_side / parameters["MinLaplacianSize"]))
         gaussian = self.gaussian_pyramid(depth, images)

@@ -3,10 +3,11 @@ Module containing helper functions that execute small tasks.
 These can be parallellized with Ray.
 """
 
-import tempfile, logging
+import tempfile, logging, psutil, os
 import numpy as np
 import cv2
 import ray
+from guppy import hpy
 
 # Setup logging
 log = logging.getLogger(__name__)
@@ -42,7 +43,7 @@ def loadImage(image_path, dir):
     )
     grayscale_memmap[:] = image_grayscale
 
-    log.info("Loaded image: " + image_path)
+    print("Loaded image: " + image_path)
 
     # Return info
     return [image_path, image_shape, rgb_name, grayscale_name]
@@ -76,12 +77,16 @@ def alignImage(im1_path, parameters, image_storage, dir):
         warp_mode = cv2.MOTION_EUCLIDEAN
     elif mode == "Homography":
         warp_mode = cv2.MOTION_HOMOGRAPHY
+    
+    print("ONE: " + str(psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2))
 
-    # Define 2x3 or 3x3 warp matrix
+    # Define 2x3 or 3x3 warp matrix (1's on diagonal, 0's everywhere else)
     if warp_mode == cv2.MOTION_HOMOGRAPHY:
         warp_matrix = np.eye(3, 3, dtype=np.float32)
     else:
         warp_matrix = np.eye(2, 3, dtype=np.float32)
+    
+    print("TWO: " + str(psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2))
 
     # Get number of iterations
     number_of_iterations = 5000
@@ -105,9 +110,12 @@ def alignImage(im1_path, parameters, image_storage, dir):
     if parameters["GaussianBlur"]:
         gaussian_blur_size = parameters["GaussianBlur"]
 
+    print("THREE: " + str(psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2))
+
     """
     Find transformation
     """
+    # Get grayscale and RGB memmaps of sources
     t = image_storage[im0_path]
     shape = t["image_shape"]
     gray_memmap1 = np.memmap(
@@ -128,7 +136,19 @@ def alignImage(im1_path, parameters, image_storage, dir):
         shape=shape,
     )
 
-    _, warp_matrix = cv2.findTransformECC(
+    print("FOUR: " + str(psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2))
+
+    # Tempfile for warp_matrix
+    _, temp_name = tempfile.mkstemp(suffix=".warp_matrix", dir=dir)
+    warp_matrix_memmap = np.memmap(
+        temp_name,
+        mode="w+",
+        shape=warp_matrix.shape,
+        dtype=warp_matrix.dtype,
+    )
+
+    # Calculate warp_matrix using grayscale memmaps
+    _, warp_matrix_memmap[:] = cv2.findTransformECC(
         gray_memmap1,
         gray_memmap2,
         warp_matrix,
@@ -138,57 +158,64 @@ def alignImage(im1_path, parameters, image_storage, dir):
         gaussian_blur_size,
     )
 
-    shape = (rgb_memmap2.shape[1], rgb_memmap2.shape[0])
-    if warp_mode == cv2.MOTION_HOMOGRAPHY:  # Use warpPerspective for Homography
-        # Align RGB
-        im_aligned = cv2.warpPerspective(
-            rgb_memmap2,
-            warp_matrix,
-            shape,
-            flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP,
-        )
-        # Align grayscale
-        im_grayscale_aligned = cv2.warpPerspective(
-            gray_memmap2,
-            warp_matrix,
-            shape,
-            flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP,
-        )
-    else:  # Use warpAffine for Translation, Euclidean and Affine
-        # Align RGB
-        im_aligned = cv2.warpAffine(
-            rgb_memmap2,
-            warp_matrix,
-            shape,
-            flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP,
-        )
-        # Align grayscale
-        im_grayscale_aligned = cv2.warpAffine(
-            gray_memmap2,
-            warp_matrix,
-            shape,
-            flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP,
-        )
+    print("FIVE: " + str(psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2))
 
-    # Store aligned grayscale image in new memmap files
+    # Create memaps for output images
     _, rgb_aligned_name = tempfile.mkstemp(suffix=".rgb_aligned", dir=dir)
     rgb_aligned = np.memmap(
         rgb_aligned_name,
         mode="w+",
-        shape=im_aligned.shape,
-        dtype=im_aligned.dtype,
+        shape=rgb_memmap2.shape,
+        dtype=rgb_memmap2.dtype,
     )
-    rgb_aligned[:] = im_aligned
-    del im_aligned
-
     _, grayscale_aligned_name = tempfile.mkstemp(suffix=".grayscale_aligned", dir=dir)
     grayscale_aligned = np.memmap(
         grayscale_aligned_name,
         mode="w+",
-        shape=im_grayscale_aligned.shape,
-        dtype=im_grayscale_aligned.dtype,
+        shape=gray_memmap2.shape,
+        dtype=gray_memmap2.dtype,
     )
-    grayscale_aligned[:] = im_grayscale_aligned
+
+    print("SIX: " + str(psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2))
+
+    # Calculate transformed images and write to memmaps
+    shape = (rgb_memmap2.shape[1], rgb_memmap2.shape[0])
+    if warp_mode == cv2.MOTION_HOMOGRAPHY:  # Use warpPerspective for Homography
+        # Align RGB
+        rgb_aligned[:] = cv2.warpPerspective(
+            rgb_memmap2,
+            warp_matrix_memmap,
+            shape,
+            flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP,
+        )
+        del rgb_aligned
+        # Align grayscale
+        grayscale_aligned[:] = cv2.warpPerspective(
+            gray_memmap2,
+            warp_matrix_memmap,
+            shape,
+            flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP,
+        )
+        del grayscale_aligned
+    else:  # Use warpAffine for Translation, Euclidean and Affine
+        # Align RGB
+        rgb_aligned[:] = cv2.warpAffine(
+            rgb_memmap2,
+            warp_matrix_memmap,
+            shape,
+            flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP,
+        )
+        del rgb_aligned
+        # Align grayscale
+        grayscale_aligned[:] = cv2.warpAffine(
+            gray_memmap2,
+            warp_matrix_memmap,
+            shape,
+            flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP,
+        )
+        del grayscale_aligned
+
+    print("SEVEN: " + str(psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2))
 
     print("Successfully aligned {} to {}".format(im1_path, im0_path))
 

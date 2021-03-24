@@ -1,4 +1,4 @@
 {
   "python.formatting.provider": "black",
-  "python.pythonPath": "/home/noah/miniconda3/envs/image-stack/bin/python"
+  "python.pythonPath": "/bin/python3"
 }
