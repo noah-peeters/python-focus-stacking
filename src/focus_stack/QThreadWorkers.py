@@ -206,7 +206,9 @@ class PyramidStacking(qtc.QThread):
         Stack images using gaussian + laplacian pyramids.
         """
         self.start_time = time.time()
-        stacked_file_name = self.Algorithm.PyramidAlgorithm.fusePyramid(self.files, self.Parameters)
+        stacked_file_name = self.Algorithm.PyramidAlgorithm.fusePyramid(
+            self.files, self.Parameters
+        )
         print(type(stacked_file_name))
         print(stacked_file_name)
 

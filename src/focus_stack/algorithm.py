@@ -651,4 +651,4 @@ class PyramidAlgorithm:
             "image_shape": IMAGE_SHAPE,
         }
 
-        return stacked_temp_file.name    # Return file name
+        return stacked_temp_file.name  # Return file name
