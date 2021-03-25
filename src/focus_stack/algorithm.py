@@ -15,6 +15,7 @@ class ImageHandler:
     image_storage = {}
     image_shape = ()
     temp_dir_path = None
+    rgb_images_temp_files = {}
 
     def __init__(self):
         # Initialize algorithms
@@ -59,6 +60,8 @@ class ImageHandler:
             grayscale_file_name = info_table[3]
 
             image_paths.append(image_path)
+
+            self.rgb_images_temp_files[image_path] = rgb_file_name
 
             self.image_storage[image_path] = {
                 "image_shape": image_shape,
@@ -146,9 +149,9 @@ class ImageHandler:
                     dtype="float64",
                 )
 
-        elif im_type == "stacked" and "stacked image" in self.image_storage:
-            im = self.image_storage["stacked"]
-            return np.memmap(im, mode="r", shape=im["image_shape"])
+        elif im_type == "stacked" and "stacked_image" in self.image_storage:
+            im = self.image_storage["stacked_image"]
+            return np.memmap(im["file"], mode="r", shape=im["image_shape"])
 
     # Downscale an image
     def downscaleImage(self, image, scale_percent):
@@ -180,10 +183,16 @@ class ImageHandler:
     def rgbOrAligned(self, path, im_type):
         if path in self.image_storage:
             im = self.image_storage[path]
+            # Get image shape based on im_type
+            if im_type == "grayscale":
+                shape = (im["image_shape"][0], im["image_shape"][1])
+            else:
+                shape = im["image_shape"]
+
             if im_type + "_aligned" in im:
-                return im[im_type + "_aligned"], im["image_shape"]  # Return aligned image
+                return im[im_type + "_aligned"], shape  # Return aligned image
             elif im_type + "_source" in im:
-                return im[im_type + "_source"], (im["image_shape"][0], im["image_shape"][1])  # Return source image
+                return im[im_type + "_source"], shape  # Return source image
 
 
 class LaplacianPixelAlgorithm:
@@ -346,16 +355,29 @@ class PyramidAlgorithm:
 
     def __init__(self, parent):
         self.Parent = parent
-        log.info("Initialized gaussian/laplacian pyramid algorithm.")
 
-    def generating_kernel(a1, a2=None):
-        if a1 and not a2:
-            # Not called with self
-            kernel = np.array([0.25 - a1 / 2.0, 0.25, a1, 0.25, 0.25 - a1 / 2.0])
-        else:
-            # Called with self
-            kernel = np.array([0.25 - a2 / 2.0, 0.25, a2, 0.25, 0.25 - a2 / 2.0])
+    def generating_kernel(a):
+        kernel = np.array([0.25 - a / 2.0, 0.25, a, 0.25, 0.25 - a / 2.0])
         return np.outer(kernel, kernel)
+
+    def reduce_layer(self, layer, kernel=generating_kernel(0.4)):
+        if len(layer.shape) == 2:
+            convolution = self.convolve(layer, kernel)
+            return convolution[::2, ::2]
+
+        ch_layer = self.reduce_layer(layer[:, :, 0])
+        next_layer = np.memmap(
+            tempfile.NamedTemporaryFile(),
+            mode="w+",
+            shape=tuple(list(ch_layer.shape) + [layer.shape[2]]),
+            dtype=ch_layer.dtype,
+        )
+        next_layer[:, :, 0] = ch_layer
+
+        for channel in range(1, layer.shape[2]):
+            next_layer[:, :, channel] = self.reduce_layer(layer[:, :, channel])
+
+        return next_layer
 
     def expand_layer(self, layer, kernel=generating_kernel(0.4)):
         if len(layer.shape) == 2:
@@ -386,36 +408,14 @@ class PyramidAlgorithm:
     def convolve(self, image, kernel=generating_kernel(0.4)):
         return ndimage.convolve(image.astype(np.float64), kernel, mode="mirror")
 
-    def gaussian_pyramid(self, levels, images):
-        @ray.remote
-        def reduce_layer(layer, kernel=self.generating_kernel(0.4)):
-            if len(layer.shape) == 2:
-                convolution = self.convolve(layer, kernel)
-                return convolution[::2, ::2]
-
-            ch_layer = ray.get(reduce_layer.remote(layer[:, :, 0]))
-            next_layer = np.memmap(
-                tempfile.NamedTemporaryFile(),
-                mode="w+",
-                shape=tuple(list(ch_layer.shape) + [layer.shape[2]]),
-                dtype=ch_layer.dtype,
-            )
-            next_layer[:, :, 0] = ch_layer
-
-            for channel in range(1, layer.shape[2]):
-                next_layer[:, :, channel] = ray.get(
-                    reduce_layer.remote(layer[:, :, channel])
-                )
-
-            return next_layer
-
+    def gaussian_pyramid(self, images, levels):
         # Convert images to float64
         for image in images:
             image = image.astype(np.float64, copy=False)
         pyramid = [images]
 
         while levels > 0:
-            next_layer = ray.get(reduce_layer.remote(pyramid[-1][0]))
+            next_layer = self.reduce_layer(pyramid[-1][0])
             next_layer_size = [len(images)] + list(next_layer.shape)
 
             pyramid.append(
@@ -429,7 +429,7 @@ class PyramidAlgorithm:
             pyramid[-1][0] = next_layer
 
             for layer in range(1, len(images)):
-                pyramid[-1][layer] = ray.get(reduce_layer.remote(pyramid[-2][layer]))
+                pyramid[-1][layer] = self.reduce_layer(pyramid[-2][layer])
             levels -= 1
 
         return pyramid
@@ -439,10 +439,6 @@ class PyramidAlgorithm:
         for level in range(len(gaussian) - 1, 0, -1):
             gauss = gaussian[level - 1]
             d = gauss[0].shape
-            print(d)
-            print(d[0])
-            print(d[1])
-            print(d[2])
             pyramid.append(
                 np.memmap(
                     tempfile.NamedTemporaryFile(),
@@ -595,43 +591,28 @@ class PyramidAlgorithm:
         return fused
 
     def fusePyramid(self, image_paths, parameters):
-        log.info("Start laplacian pyramid stacking.")
-
         images = []
+        IMAGE_SHAPE = ()
         for path in image_paths:
-            im_file, shape = self.Parent.rgbOrAligned(path, "rgb")
-            if im_file:
-                images.append(
-                    np.memmap(
-                        im_file,
-                        mode="r",
-                        shape=shape,
-                        dtype=np.uint8,
-                    )
+            im_path, shape = self.Parent.rgbOrAligned(path, "rgb")
+            images.append(
+                np.memmap(
+                    im_path,
+                    mode="r",
+                    shape=shape,
                 )
-        print(images)
-
-        log.info("Just loaded {} images.".format(len(image_paths)))
-        log.info(
-            "Memory is now: {} MB".format(round(Utilities().python_memory_usage()), 2)
-        )
+            )
+            IMAGE_SHAPE = shape
 
         # Calculate gaussian pyramid
-        print(images[0])
         smallest_side = min(images[0].shape[:2])
         depth = int(np.log2(smallest_side / parameters["MinLaplacianSize"]))
-        gaussian = self.gaussian_pyramid(depth, images)
+        gaussian = self.gaussian_pyramid(images, depth)
         log.info("Just calculated gaussian pyramid.")
-        log.info(
-            "Memory is now: {} MB".format(round(Utilities().python_memory_usage()), 2)
-        )
 
         # Calculate laplacian pyramid
         pyramids = self.laplacian_pyramid(images, gaussian)
-        log.info("Just calculated laplacian pyramid.")
-        log.info(
-            "Memory is now: {} MB".format(round(Utilities().python_memory_usage()), 2)
-        )
+        log.info("Just calculated laplacian pyramid")
 
         # Fuse pyramid
         kernel_size = 5
@@ -640,10 +621,8 @@ class PyramidAlgorithm:
             fused.append(self.get_fused_laplacian(pyramids[layer]))
 
         fused = fused[::-1]
+
         log.info("Just fused pyramid.")
-        log.info(
-            "Memory is now: {} MB".format(round(Utilities().python_memory_usage()), 2)
-        )
 
         # Collapse pyramid
         image = fused[-1]
@@ -654,25 +633,22 @@ class PyramidAlgorithm:
             image = expanded + layer
 
         log.info("Just collapsed pyramid.")
-        log.info(
-            "Memory is now: {} MB".format(round(Utilities().python_memory_usage()), 2)
-        )
 
         # Create memmap (same size as rgb input)
         stacked_temp_file = tempfile.NamedTemporaryFile()
         stacked_memmap = np.memmap(
             stacked_temp_file,
             mode="w+",
-            shape=self.Parent.image_shape,
+            shape=IMAGE_SHAPE,
             dtype=images[0].dtype,
         )
 
         stacked_memmap[:] = image
-        log.info("Successfully created stacked image.")
-        log.info(
-            "Memory is now: {} MB".format(round(Utilities().python_memory_usage()), 2)
-        )
 
-        self.Parent.stacked_image_temp_file = stacked_temp_file  # Store temp file
+        # Store memmap
+        self.Parent.image_storage["stacked_image"] = {
+            "file": stacked_temp_file,
+            "image_shape": IMAGE_SHAPE,
+        }
 
-        del stacked_memmap
+        return stacked_temp_file.name    # Return file name

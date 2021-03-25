@@ -131,9 +131,9 @@ class MainWindow(qtw.QMainWindow):
         load_images_action = create_action(
             "&Load images",
             "Ctrl+L",
-            self.load_images,
+            self.loadImages,
             "Load a set of images from disk.",
-            "load_images",
+            "loadImages",
             file_menu,
         )
         clear_loaded_images_action = create_action(
@@ -165,16 +165,16 @@ class MainWindow(qtw.QMainWindow):
         self.align_images_action = create_action(
             "&Align images",
             "Ctrl+Shift+A",
-            self.align_images,
+            self.alignImages,
             "Align images to each other.",
-            "align_images",
+            "alignImages",
             processing_menu,
         )
         self.align_images_action.setEnabled(False)
         self.stack_images_action = create_action(
             "&Stack images",
             "Ctrl+Shift+S",
-            self.stackImages_Laplacian,
+            self.stackImages,
             "Focus stack images.",
             "focus_stack_images",
             processing_menu,
@@ -247,7 +247,7 @@ class MainWindow(qtw.QMainWindow):
     def save_file(self):
         print("Save file")
 
-    def load_images(self):
+    def loadImages(self):
         dir = None
         if self.current_directory:
             dir = self.current_directory
@@ -341,7 +341,7 @@ class MainWindow(qtw.QMainWindow):
 
         image_progress.exec_()
 
-    def align_images(self):
+    def alignImages(self):
         def proceedToAlign(parameters, popup):
             if not parameters:
                 return  # Some value was entered incorrectly, retry
@@ -408,7 +408,7 @@ class MainWindow(qtw.QMainWindow):
         popup = ParametersPopUp.AlignImagesPopUp(proceedToAlign)
         popup.exec_()
 
-    def stackImages_Laplacian(self):
+    def stackImages(self):
         def proceedToStacking(stacking_mode, parameters, popup):
             if not parameters:
                 return  # Some value was entered incorrectly, retry
@@ -600,8 +600,8 @@ class MainWindow(qtw.QMainWindow):
                 )
 
     def align_and_stack_images(self):
-        self.align_images()
-        self.stackImages_Laplacian()
+        self.alignImages()
+        self.stackImages()
 
     def clear_loaded_images(self):
         # Display confirmation dialog
