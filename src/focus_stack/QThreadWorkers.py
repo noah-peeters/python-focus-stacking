@@ -207,8 +207,6 @@ class PyramidStacking(qtc.QThread):
         """
         self.start_time = time.time()
         stacked_file_name = self.Algorithm.PyramidAlgorithm.fusePyramid(self.files, self.Parameters)
-        print(type(stacked_file_name))
-        print(stacked_file_name)
 
         # Operation ended
         self.finished.emit(
