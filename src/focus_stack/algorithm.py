@@ -23,7 +23,7 @@ class ImageHandler:
         self.PyramidAlgorithm = PyramidAlgorithm(self)
 
         # Create tempdirectory (for storing all image data)
-        self.temp_dir_path = tempfile.mkdtemp(prefix="ptyhon_focus_stacking_")
+        self.temp_dir_path = tempfile.mkdtemp(prefix="python_focus_stacking_")
         # Remove folder on program exit
         atexit.register(self.deleteTempFolder)
 
@@ -355,29 +355,13 @@ class PyramidAlgorithm:
 
     def __init__(self, parent):
         self.Parent = parent
+        from src.focus_stack.RayFunctions import reduceLayer
+
+        self.reduceLayer = reduceLayer
 
     def generating_kernel(a):
         kernel = np.array([0.25 - a / 2.0, 0.25, a, 0.25, 0.25 - a / 2.0])
         return np.outer(kernel, kernel)
-
-    def reduce_layer(self, layer, kernel=generating_kernel(0.4)):
-        if len(layer.shape) == 2:
-            convolution = self.convolve(layer, kernel)
-            return convolution[::2, ::2]
-
-        ch_layer = self.reduce_layer(layer[:, :, 0])
-        next_layer = np.memmap(
-            tempfile.NamedTemporaryFile(),
-            mode="w+",
-            shape=tuple(list(ch_layer.shape) + [layer.shape[2]]),
-            dtype=ch_layer.dtype,
-        )
-        next_layer[:, :, 0] = ch_layer
-
-        for channel in range(1, layer.shape[2]):
-            next_layer[:, :, channel] = self.reduce_layer(layer[:, :, channel])
-
-        return next_layer
 
     def expand_layer(self, layer, kernel=generating_kernel(0.4)):
         if len(layer.shape) == 2:
@@ -415,7 +399,7 @@ class PyramidAlgorithm:
         pyramid = [images]
 
         while levels > 0:
-            next_layer = self.reduce_layer(pyramid[-1][0])
+            next_layer = ray.get(self.reduceLayer.remote(pyramid[-1][0]))
             next_layer_size = [len(images)] + list(next_layer.shape)
 
             pyramid.append(
@@ -429,7 +413,9 @@ class PyramidAlgorithm:
             pyramid[-1][0] = next_layer
 
             for layer in range(1, len(images)):
-                pyramid[-1][layer] = self.reduce_layer(pyramid[-2][layer])
+                pyramid[-1][layer] = ray.get(
+                    self.reduceLayer.remote(pyramid[-2][layer])
+                )
             levels -= 1
 
         return pyramid

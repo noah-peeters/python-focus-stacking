@@ -133,7 +133,7 @@ class MainWindow(qtw.QMainWindow):
             "Ctrl+L",
             self.loadImages,
             "Load a set of images from disk.",
-            "loadImages",
+            "load_images",
             file_menu,
         )
         clear_loaded_images_action = create_action(
@@ -167,7 +167,7 @@ class MainWindow(qtw.QMainWindow):
             "Ctrl+Shift+A",
             self.alignImages,
             "Align images to each other.",
-            "alignImages",
+            "align_images",
             processing_menu,
         )
         self.align_images_action.setEnabled(False)

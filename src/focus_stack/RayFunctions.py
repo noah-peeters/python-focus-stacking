@@ -7,6 +7,7 @@ import tempfile, logging, psutil, os
 import numpy as np
 import cv2
 import ray
+from scipy import ndimage
 from guppy import hpy
 
 # Setup logging
@@ -220,3 +221,41 @@ def alignImage(im1_path, parameters, image_storage, dir):
     print("Successfully aligned {} to {}".format(im1_path, im0_path))
 
     return [im1_path, rgb_aligned_name, grayscale_aligned_name]
+
+# Reduce layer for gaussian pyramid
+@ray.remote
+def reduceLayer(layer):
+    def generating_kernel(a):
+        kernel = np.array([0.25 - a / 2.0, 0.25, a, 0.25, 0.25 - a / 2.0])
+        return np.outer(kernel, kernel)
+
+    def convolve(image, kernel=generating_kernel(0.4)):
+        return ndimage.convolve(image.astype(np.float64), kernel, mode="mirror")
+    
+    print("start")
+    kernel = generating_kernel(0.4)
+    if len(layer.shape) == 2:
+        convolution = convolve(layer, kernel)
+        return convolution[::2, ::2]
+
+    ch_layer = ray.get(reduceLayer.remote(layer[:, :, 0]))
+    next_layer = np.memmap(
+        tempfile.NamedTemporaryFile(),
+        mode="w+",
+        shape=tuple(list(ch_layer.shape) + [layer.shape[2]]),
+        dtype=ch_layer.dtype,
+    )
+    next_layer[:, :, 0] = ch_layer
+
+    # Get data in parallel
+    data = [reduceLayer.remote(layer[:, :, channel]) for channel in range(1, layer.shape[2])]
+    data = ray.get(data)
+    # Write to arrays
+    for index, value in enumerate(data):
+        next_layer[:, :, index] = value
+    # for channel in range(1, layer.shape[2]):
+    #     next_layer[:, :, channel] = ray.get(reduceLayer.remote(layer[:, :, channel]))
+    
+    print("end")
+
+    return next_layer
