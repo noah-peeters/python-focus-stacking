@@ -256,7 +256,7 @@ def reduceLayer(layer):
     # Write to arrays
     for index, value in enumerate(data):
         next_layer[:, :, index] = value
-    
+
     print("end")
 
     return next_layer
