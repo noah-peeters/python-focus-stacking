@@ -598,27 +598,42 @@ class PyramidAlgorithm:
             )
             IMAGE_SHAPE = shape
 
-        # Calculate gaussian pyramid
+        # Calculate Gaussian pyramid
+        log.info("Start Gaussian pyramid calculation.")
         smallest_side = min(images[0].shape[:2])
         depth = int(np.log2(smallest_side / parameters["MinLaplacianSize"]))
         gaussian = self.gaussian_pyramid(images, depth)
-        log.info("Just calculated gaussian pyramid.")
+        log.info("Finished calculating Gaussian pyramid.")
 
-        # Calculate laplacian pyramid
+        # Calculate Laplacian pyramid
+        log.info("Start Laplacian pyramid calculation.")
         pyramids = self.laplacian_pyramid(images, gaussian)
-        log.info("Just calculated laplacian pyramid")
+        log.info("Finished calculating Laplacian pyramid.")
 
         # Fuse pyramid
+        # TODO: Parallellize using ray
+        log.info("Start pyramid fusing.")
         kernel_size = 5
         fused = [self.get_fused_base(pyramids[-1], kernel_size)]
         for layer in range(len(pyramids) - 2, -1, -1):
             fused.append(self.get_fused_laplacian(pyramids[layer]))
 
+        # Create memmap for storing fused pyramid
+        # _, fused_temp_name = tempfile.mkstemp(
+        #     suffix=".fused_tempfile", dir=self.Parent.temp_dir_path
+        # )
+        # fused_memmap = np.memmap(
+        #     fused_temp_name,
+        #     mode="w+",
+        #     shape=fused.shape,
+        #     dtype=fused.dtype,
+        # )
         fused = fused[::-1]
-
-        log.info("Just fused pyramid.")
+        log.info("Finished fusing pyramid.")
 
         # Collapse pyramid
+        # TODO: Parallellize using ray
+        log.info("Start collapsing pyramid.")
         image = fused[-1]
         for layer in fused[-2::-1]:
             expanded = self.expand_layer(image)
@@ -626,7 +641,7 @@ class PyramidAlgorithm:
                 expanded = expanded[: layer.shape[0], : layer.shape[1]]
             image = expanded + layer
 
-        log.info("Just collapsed pyramid.")
+        log.info("Finished collapsing pyramid.")
 
         # Create memmap (same size as rgb input)
         stacked_temp_file = tempfile.NamedTemporaryFile()
