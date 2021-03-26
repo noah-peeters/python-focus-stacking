@@ -253,8 +253,6 @@ def reduceLayer(layer):
     # Write to arrays
     for index, value in enumerate(data):
         next_layer[:, :, index] = value
-    # for channel in range(1, layer.shape[2]):
-    #     next_layer[:, :, channel] = ray.get(reduceLayer.remote(layer[:, :, channel]))
     
     print("end")
 

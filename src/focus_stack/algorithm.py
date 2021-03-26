@@ -363,6 +363,9 @@ class PyramidAlgorithm:
         kernel = np.array([0.25 - a / 2.0, 0.25, a, 0.25, 0.25 - a / 2.0])
         return np.outer(kernel, kernel)
 
+    def convolve(self, image, kernel=generating_kernel(0.4)):
+        return ndimage.convolve(image.astype(np.float64), kernel, mode="mirror")
+
     def expand_layer(self, layer, kernel=generating_kernel(0.4)):
         if len(layer.shape) == 2:
             expand = next_layer = np.memmap(
@@ -389,16 +392,15 @@ class PyramidAlgorithm:
 
         return next_layer
 
-    def convolve(self, image, kernel=generating_kernel(0.4)):
-        return ndimage.convolve(image.astype(np.float64), kernel, mode="mirror")
-
     def gaussian_pyramid(self, images, levels):
+        log.info("Started calculation of Gaussian pyramid.")
         # Convert images to float64
         for image in images:
             image = image.astype(np.float64, copy=False)
         pyramid = [images]
 
         while levels > 0:
+            log.info("Start processing of level {}.".format(levels))
             next_layer = ray.get(self.reduceLayer.remote(pyramid[-1][0]))
             next_layer_size = [len(images)] + list(next_layer.shape)
 
@@ -412,17 +414,20 @@ class PyramidAlgorithm:
             )
             pyramid[-1][0] = next_layer
 
-            for layer in range(1, len(images)):
-                pyramid[-1][layer] = ray.get(
-                    self.reduceLayer.remote(pyramid[-2][layer])
+            for image_index in range(1, len(images)):
+                print("Start processing of image {}.".format(image_index))
+                pyramid[-1][image_index] = ray.get(
+                    self.reduceLayer.remote(pyramid[-2][image_index])
                 )
             levels -= 1
 
         return pyramid
 
     def laplacian_pyramid(self, images, gaussian):
+        log.info("Started calculation of Laplacian pyramid.")
         pyramid = [gaussian[-1]]
         for level in range(len(gaussian) - 1, 0, -1):
+            log.info("Start processing of level {}.".format(level))
             gauss = gaussian[level - 1]
             d = gauss[0].shape
             pyramid.append(
@@ -434,24 +439,15 @@ class PyramidAlgorithm:
                 )
             )
 
-            for layer in range(len(images)):
-                gauss_layer = gauss[layer]
-                expanded = self.expand_layer(gaussian[level][layer])
+            for image_index in range(len(images)):
+                print("Start processing of image {}.".format(image_index))
+                gauss_layer = gauss[image_index]
+                expanded = self.expand_layer(gaussian[level][image_index])
                 if expanded.shape != gauss_layer.shape:
                     expanded = expanded[: gauss_layer.shape[0], : gauss_layer.shape[1]]
-                pyramid[-1][layer] = gauss_layer - expanded
+                pyramid[-1][image_index] = gauss_layer - expanded
 
         return pyramid[::-1]
-
-    def collapse(self, pyramid):
-        image = pyramid[-1]
-        for layer in pyramid[-2::-1]:
-            expanded = self.expand_layer(image)
-            if expanded.shape != layer.shape:
-                expanded = expanded[: layer.shape[0], : layer.shape[1]]
-            image = expanded + layer
-
-        return image
 
     def get_probabilities(self, gray_image):
         levels, counts = np.unique(gray_image.astype(np.uint8), return_counts=True)
@@ -461,60 +457,72 @@ class PyramidAlgorithm:
         probabilities[levels] = counts.astype(np.float64) / counts.sum()
         return probabilities
 
-    def entropy(self, image, kernel_size):
-        def _area_entropy(area, probabilities):
-            levels = area.flatten()
-            return -1.0 * (levels * np.log(probabilities[levels])).sum()
-
-        probabilities = self.get_probabilities(image)
-        pad_amount = int((kernel_size - 1) / 2)
-        padded_image = cv2.copyMakeBorder(
-            image, pad_amount, pad_amount, pad_amount, pad_amount, cv2.BORDER_REFLECT101
-        )
-        entropies = np.memmap(
-            tempfile.NamedTemporaryFile(),
-            mode="w+",
-            shape=image.shape[:2],
-            dtype=np.float64,
-        )
-        offset = np.arange(-pad_amount, pad_amount + 1)
-        for row in range(entropies.shape[0]):
-            for column in range(entropies.shape[1]):
-                area = padded_image[
-                    row + pad_amount + offset[:, np.newaxis],
-                    column + pad_amount + offset,
-                ]
-                entropies[row, column] = _area_entropy(area, probabilities)
-
-        return entropies
-
-    def deviation(self, image, kernel_size):
-        def _area_deviation(area):
-            average = np.average(area).astype(np.float64)
-            return np.square(area - average).sum() / area.size
-
-        pad_amount = int((kernel_size - 1) / 2)
-        padded_image = cv2.copyMakeBorder(
-            image, pad_amount, pad_amount, pad_amount, pad_amount, cv2.BORDER_REFLECT101
-        )
-        deviations = np.memmap(
-            tempfile.NamedTemporaryFile(),
-            mode="w+",
-            shape=image.shape[:2],
-            dtype=np.float64,
-        )
-        offset = np.arange(-pad_amount, pad_amount + 1)
-        for row in range(deviations.shape[0]):
-            for column in range(deviations.shape[1]):
-                area = padded_image[
-                    row + pad_amount + offset[:, np.newaxis],
-                    column + pad_amount + offset,
-                ]
-                deviations[row, column] = _area_deviation(area)
-
-        return deviations
-
     def get_fused_base(self, images, kernel_size):
+        # Functions
+        def deviation(image, kernel_size):
+            def _area_deviation(area):
+                average = np.average(area).astype(np.float64)
+                return np.square(area - average).sum() / area.size
+
+            pad_amount = int((kernel_size - 1) / 2)
+            padded_image = cv2.copyMakeBorder(
+                image,
+                pad_amount,
+                pad_amount,
+                pad_amount,
+                pad_amount,
+                cv2.BORDER_REFLECT101,
+            )
+            deviations = np.memmap(
+                tempfile.NamedTemporaryFile(),
+                mode="w+",
+                shape=image.shape[:2],
+                dtype=np.float64,
+            )
+            offset = np.arange(-pad_amount, pad_amount + 1)
+            for row in range(deviations.shape[0]):
+                for column in range(deviations.shape[1]):
+                    area = padded_image[
+                        row + pad_amount + offset[:, np.newaxis],
+                        column + pad_amount + offset,
+                    ]
+                    deviations[row, column] = _area_deviation(area)
+
+            return deviations
+
+        def entropy(image, kernel_size):
+            def _area_entropy(area, probabilities):
+                levels = area.flatten()
+                return -1.0 * (levels * np.log(probabilities[levels])).sum()
+
+            probabilities = self.get_probabilities(image)
+            pad_amount = int((kernel_size - 1) / 2)
+            padded_image = cv2.copyMakeBorder(
+                image,
+                pad_amount,
+                pad_amount,
+                pad_amount,
+                pad_amount,
+                cv2.BORDER_REFLECT101,
+            )
+            entropies = np.memmap(
+                tempfile.NamedTemporaryFile(),
+                mode="w+",
+                shape=image.shape[:2],
+                dtype=np.float64,
+            )
+            offset = np.arange(-pad_amount, pad_amount + 1)
+            for row in range(entropies.shape[0]):
+                for column in range(entropies.shape[1]):
+                    area = padded_image[
+                        row + pad_amount + offset[:, np.newaxis],
+                        column + pad_amount + offset,
+                    ]
+                    entropies[row, column] = _area_entropy(area, probabilities)
+
+            return entropies
+
+        # Start fusing
         layers = images.shape[0]
         entropies = np.memmap(
             tempfile.NamedTemporaryFile(),
@@ -527,8 +535,8 @@ class PyramidAlgorithm:
             gray_image = cv2.cvtColor(
                 images[layer].astype(np.float32), cv2.COLOR_BGR2GRAY
             ).astype(np.uint8)
-            entropies[layer] = self.entropy(gray_image, kernel_size)
-            deviations[layer] = self.deviation(gray_image, kernel_size)
+            entropies[layer] = entropy(gray_image, kernel_size)
+            deviations[layer] = deviation(gray_image, kernel_size)
 
         best_e = np.argmax(entropies, axis=0)
         best_d = np.argmax(deviations, axis=0)
