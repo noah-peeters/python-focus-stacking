@@ -233,7 +233,6 @@ def reduceLayer(layer):
     def convolve(image, kernel=generating_kernel(0.4)):
         return ndimage.convolve(image.astype(np.float64), kernel, mode="mirror")
 
-    print("start")
     kernel = generating_kernel(0.4)
     if len(layer.shape) == 2:
         convolution = convolve(layer, kernel)
@@ -256,7 +255,5 @@ def reduceLayer(layer):
     # Write to arrays
     for index, value in enumerate(data):
         next_layer[:, :, index] = value
-    
-    print("end")
 
     return next_layer
