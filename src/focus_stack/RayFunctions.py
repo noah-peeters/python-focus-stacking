@@ -223,16 +223,19 @@ def alignImage(im1_path, parameters, image_storage, dir):
     return [im1_path, rgb_aligned_name, grayscale_aligned_name]
 
 
+### LAPLACIAN PYRAMID FUNCTIONS ###
+def generating_kernel(a):
+    kernel = np.array([0.25 - a / 2.0, 0.25, a, 0.25, 0.25 - a / 2.0])
+    return np.outer(kernel, kernel)
+
+
+def convolve(image, kernel=generating_kernel(0.4)):
+    return ndimage.convolve(image.astype(np.float64), kernel, mode="mirror")
+
+
 # Reduce layer for gaussian pyramid
 @ray.remote
 def reduceLayer(layer):
-    def generating_kernel(a):
-        kernel = np.array([0.25 - a / 2.0, 0.25, a, 0.25, 0.25 - a / 2.0])
-        return np.outer(kernel, kernel)
-
-    def convolve(image, kernel=generating_kernel(0.4)):
-        return ndimage.convolve(image.astype(np.float64), kernel, mode="mirror")
-
     kernel = generating_kernel(0.4)
     if len(layer.shape) == 2:
         convolution = convolve(layer, kernel)
@@ -258,3 +261,167 @@ def reduceLayer(layer):
         next_layer[:, :, index + 1] = value
 
     return next_layer
+
+
+@ray.remote
+def getFusedBase(images, kernel_size):
+    # Functions
+    def entropy(image, kernel_size):
+        def get_probabilities():
+            levels, counts = np.unique(image.astype(np.uint8), return_counts=True)
+            probabilities = np.memmap(
+                tempfile.NamedTemporaryFile(),
+                mode="w+",
+                shape=(256,),
+                dtype=np.float64,
+            )
+            probabilities[levels] = counts.astype(np.float64) / counts.sum()
+            return probabilities
+
+        def area_entropy(area, probabilities):
+            levels = area.flatten()
+            return -1.0 * (levels * np.log(probabilities[levels])).sum()
+
+        probabilities = get_probabilities()
+        pad_amount = int((kernel_size - 1) / 2)
+        padded_image = cv2.copyMakeBorder(
+            image,
+            pad_amount,
+            pad_amount,
+            pad_amount,
+            pad_amount,
+            cv2.BORDER_REFLECT101,
+        )
+        entropies = np.memmap(
+            tempfile.NamedTemporaryFile(),
+            mode="w+",
+            shape=image.shape[:2],
+            dtype=np.float64,
+        )
+        offset = np.arange(-pad_amount, pad_amount + 1)
+        for row in range(entropies.shape[0]):
+            for column in range(entropies.shape[1]):
+                area = padded_image[
+                    row + pad_amount + offset[:, np.newaxis],
+                    column + pad_amount + offset,
+                ]
+                entropies[row, column] = area_entropy(area, probabilities)
+
+        return entropies
+
+    def deviation(image, kernel_size):
+        def area_deviation(area):
+            average = np.average(area).astype(np.float64)
+            return np.square(area - average).sum() / area.size
+
+        pad_amount = int((kernel_size - 1) / 2)
+        padded_image = cv2.copyMakeBorder(
+            image,
+            pad_amount,
+            pad_amount,
+            pad_amount,
+            pad_amount,
+            cv2.BORDER_REFLECT101,
+        )
+        deviations = np.memmap(
+            tempfile.NamedTemporaryFile(),
+            mode="w+",
+            shape=image.shape[:2],
+            dtype=np.float64,
+        )
+        offset = np.arange(-pad_amount, pad_amount + 1)
+        for row in range(deviations.shape[0]):
+            for column in range(deviations.shape[1]):
+                area = padded_image[
+                    row + pad_amount + offset[:, np.newaxis],
+                    column + pad_amount + offset,
+                ]
+                deviations[row, column] = area_deviation(area)
+
+        return deviations
+
+    # Create memmaps for storing entropies and deviations
+    layers = images.shape[0]
+    entropies = np.memmap(
+        tempfile.NamedTemporaryFile(),
+        mode="w+",
+        shape=images.shape[:3],
+        dtype=np.float64,
+    )
+    deviations = np.memmap(
+        tempfile.NamedTemporaryFile(),
+        mode="w+",
+        shape=images.shape[:3],
+        dtype=np.float64,
+    )
+    # Get entropies and deviations
+    entropies_calc = []
+    deviations_calc = []
+    for layer in range(layers):
+        gray_image = cv2.cvtColor(
+            images[layer].astype(np.float32), cv2.COLOR_BGR2GRAY
+        ).astype(np.uint8)
+
+        entropies[layer] = entropy(gray_image, kernel_size)
+        deviations[layer] = deviation(gray_image, kernel_size)
+
+    #     @ray.remote
+    #     def entropy_add_to_matrix(l):
+    #         entropies[layer] = entropy(gray_image, kernel_size)
+
+    #     @ray.remote
+    #     def deviation_add_to_matrix(l):
+    #         deviations[layer] = deviation(gray_image, kernel_size)
+
+    #     entropies_calc.append(entropy_add_to_matrix.remote())
+    #     deviations_calc.append(deviation_add_to_matrix.remote())
+
+    # ray.get(entropies_calc)
+    # ray.get(deviations_calc)
+
+    best_e = np.argmax(entropies, axis=0)
+    best_d = np.argmax(deviations, axis=0)
+    fused = np.memmap(
+        tempfile.NamedTemporaryFile(),
+        mode="w+",
+        shape=images.shape[1:],
+        dtype=np.float64,
+    )
+
+    for layer in range(layers):
+        fused += np.where(best_e[:, :, np.newaxis] == layer, images[layer], 0)
+        fused += np.where(best_d[:, :, np.newaxis] == layer, images[layer], 0)
+
+    return (fused / 2).astype(images.dtype)
+
+@ray.remote
+def getFusedLaplacian(laplacians):
+    def region_energy(laplacian):
+        return convolve(np.square(laplacian))
+
+    layers = laplacians.shape[0]
+    region_energies = np.memmap(
+        tempfile.NamedTemporaryFile(),
+        mode="w+",
+        shape=laplacians.shape[:3],
+        dtype=np.float64,
+    )
+
+    for layer in range(layers):
+        gray_lap = cv2.cvtColor(
+            laplacians[layer].astype(np.float32), cv2.COLOR_BGR2GRAY
+        )
+        region_energies[layer] = region_energy(gray_lap)
+
+    best_re = np.argmax(region_energies, axis=0)
+    fused = np.memmap(
+        tempfile.NamedTemporaryFile(),
+        mode="w+",
+        shape=laplacians.shape[1:],
+        dtype=laplacians.dtype,
+    )
+
+    for layer in range(layers):
+        fused += np.where(best_re[:, :, np.newaxis] == layer, laplacians[layer], 0)
+
+    return fused
