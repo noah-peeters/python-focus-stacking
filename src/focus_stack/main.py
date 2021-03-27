@@ -12,9 +12,6 @@ import src.focus_stack.ParametersPopUp as ParametersPopUp
 # Topbar menu imports
 import src.focus_stack.Menu.Help as HelpMenu
 
-# Initialize ray
-ray.init()
-
 # Setup logging
 class OneLineExceptionFormatter(logging.Formatter):
     def formatException(self, exc_info):
@@ -200,7 +197,7 @@ class MainWindow(qtw.QMainWindow):
             image_preview_menu,
         )
         self.image_preview_reset_zoom.setEnabled(False)
-        self.image_preview_reset_zoom.setCheckable(False)
+        self.image_preview_reset_zoom.setCheckable(True)
         self.image_preview_reset_zoom.setChecked(True)
 
         # edit_menu
@@ -1076,7 +1073,10 @@ class Preferences(qtw.QDialog):
 
 def main():
     app = qtw.QApplication(sys.argv)
-    # window = MainWindow()
+
+    # Initialize ray
+    ray.init()
+
     MainWindow()
 
     # Force fusion style
