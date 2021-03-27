@@ -254,6 +254,7 @@ def reduceLayer(layer):
     data = ray.get(data)
     # Write to arrays
     for index, value in enumerate(data):
-        next_layer[:, :, index] = value
+        # +1 because python starts lists at 0 we want from 1 (range(1, layer.shape[2]))
+        next_layer[:, :, index + 1] = value
 
     return next_layer
