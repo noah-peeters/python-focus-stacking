@@ -449,18 +449,53 @@ class PyramidAlgorithm:
 
         return pyramid[::-1]
 
-    def get_probabilities(self, gray_image):
-        levels, counts = np.unique(gray_image.astype(np.uint8), return_counts=True)
-        probabilities = np.memmap(
-            tempfile.NamedTemporaryFile(), mode="w+", shape=(256,), dtype=np.float64
-        )
-        probabilities[levels] = counts.astype(np.float64) / counts.sum()
-        return probabilities
-
     def get_fused_base(self, images, kernel_size):
         # Functions
+        def entropy(image, kernel_size):
+            def get_probabilities():
+                levels, counts = np.unique(image.astype(np.uint8), return_counts=True)
+                probabilities = np.memmap(
+                    tempfile.NamedTemporaryFile(),
+                    mode="w+",
+                    shape=(256,),
+                    dtype=np.float64,
+                )
+                probabilities[levels] = counts.astype(np.float64) / counts.sum()
+                return probabilities
+
+            def area_entropy(area, probabilities):
+                levels = area.flatten()
+                return -1.0 * (levels * np.log(probabilities[levels])).sum()
+
+            probabilities = get_probabilities()
+            pad_amount = int((kernel_size - 1) / 2)
+            padded_image = cv2.copyMakeBorder(
+                image,
+                pad_amount,
+                pad_amount,
+                pad_amount,
+                pad_amount,
+                cv2.BORDER_REFLECT101,
+            )
+            entropies = np.memmap(
+                tempfile.NamedTemporaryFile(),
+                mode="w+",
+                shape=image.shape[:2],
+                dtype=np.float64,
+            )
+            offset = np.arange(-pad_amount, pad_amount + 1)
+            for row in range(entropies.shape[0]):
+                for column in range(entropies.shape[1]):
+                    area = padded_image[
+                        row + pad_amount + offset[:, np.newaxis],
+                        column + pad_amount + offset,
+                    ]
+                    entropies[row, column] = area_entropy(area, probabilities)
+
+            return entropies
+
         def deviation(image, kernel_size):
-            def _area_deviation(area):
+            def area_deviation(area):
                 average = np.average(area).astype(np.float64)
                 return np.square(area - average).sum() / area.size
 
@@ -486,43 +521,11 @@ class PyramidAlgorithm:
                         row + pad_amount + offset[:, np.newaxis],
                         column + pad_amount + offset,
                     ]
-                    deviations[row, column] = _area_deviation(area)
+                    deviations[row, column] = area_deviation(area)
 
             return deviations
 
-        def entropy(image, kernel_size):
-            def _area_entropy(area, probabilities):
-                levels = area.flatten()
-                return -1.0 * (levels * np.log(probabilities[levels])).sum()
-
-            probabilities = self.get_probabilities(image)
-            pad_amount = int((kernel_size - 1) / 2)
-            padded_image = cv2.copyMakeBorder(
-                image,
-                pad_amount,
-                pad_amount,
-                pad_amount,
-                pad_amount,
-                cv2.BORDER_REFLECT101,
-            )
-            entropies = np.memmap(
-                tempfile.NamedTemporaryFile(),
-                mode="w+",
-                shape=image.shape[:2],
-                dtype=np.float64,
-            )
-            offset = np.arange(-pad_amount, pad_amount + 1)
-            for row in range(entropies.shape[0]):
-                for column in range(entropies.shape[1]):
-                    area = padded_image[
-                        row + pad_amount + offset[:, np.newaxis],
-                        column + pad_amount + offset,
-                    ]
-                    entropies[row, column] = _area_entropy(area, probabilities)
-
-            return entropies
-
-        # Start fusing
+        # Create memmaps for storing entropies and deviations
         layers = images.shape[0]
         entropies = np.memmap(
             tempfile.NamedTemporaryFile(),
@@ -530,13 +533,36 @@ class PyramidAlgorithm:
             shape=images.shape[:3],
             dtype=np.float64,
         )
-        deviations = np.copy(entropies)
+        deviations = np.memmap(
+            tempfile.NamedTemporaryFile(),
+            mode="w+",
+            shape=images.shape[:3],
+            dtype=np.float64,
+        )
+        # Get entropies and deviations
+        entropies_calc = []
+        deviations_calc = []
         for layer in range(layers):
             gray_image = cv2.cvtColor(
                 images[layer].astype(np.float32), cv2.COLOR_BGR2GRAY
             ).astype(np.uint8)
+
             entropies[layer] = entropy(gray_image, kernel_size)
             deviations[layer] = deviation(gray_image, kernel_size)
+
+        #     @ray.remote
+        #     def entropy_add_to_matrix(l):
+        #         entropies[layer] = entropy(gray_image, kernel_size)
+
+        #     @ray.remote
+        #     def deviation_add_to_matrix(l):
+        #         deviations[layer] = deviation(gray_image, kernel_size)
+
+        #     entropies_calc.append(entropy_add_to_matrix.remote())
+        #     deviations_calc.append(deviation_add_to_matrix.remote())
+
+        # ray.get(entropies_calc)
+        # ray.get(deviations_calc)
 
         best_e = np.argmax(entropies, axis=0)
         best_d = np.argmax(deviations, axis=0)
@@ -616,19 +642,11 @@ class PyramidAlgorithm:
         kernel_size = 5
         fused = [self.get_fused_base(pyramids[-1], kernel_size)]
         for layer in range(len(pyramids) - 2, -1, -1):
+            log.info("Fusing layer {}.".format(layer))
             fused.append(self.get_fused_laplacian(pyramids[layer]))
 
-        # Create memmap for storing fused pyramid
-        # _, fused_temp_name = tempfile.mkstemp(
-        #     suffix=".fused_tempfile", dir=self.Parent.temp_dir_path
-        # )
-        # fused_memmap = np.memmap(
-        #     fused_temp_name,
-        #     mode="w+",
-        #     shape=fused.shape,
-        #     dtype=fused.dtype,
-        # )
-        fused = fused[::-1]
+        # Invert list positions (fused = fused[::-1])
+        fused.reverse()
         log.info("Finished fusing pyramid.")
 
         # Collapse pyramid
