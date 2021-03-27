@@ -394,6 +394,7 @@ def getFusedBase(images, kernel_size):
 
     return (fused / 2).astype(images.dtype)
 
+
 @ray.remote
 def getFusedLaplacian(laplacians):
     def region_energy(laplacian):
